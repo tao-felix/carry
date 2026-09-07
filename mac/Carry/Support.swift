@@ -1,17 +1,24 @@
 import AppKit
 import Foundation
 
-/// `~/.carry` (or `$CARRY_HOME`), the CLI's home. The app writes only `app.json` and `logs/app.log` there.
+/// `~/.carry`, the home the engine shares with the CLI. DEBUG builds honour `$CARRY_HOME` for testing.
 enum CarryHome {
     static let dir: URL = {
+        #if DEBUG
         if let custom = ProcessInfo.processInfo.environment["CARRY_HOME"], !custom.isEmpty {
             return URL(fileURLWithPath: (custom as NSString).expandingTildeInPath, isDirectory: true)
         }
+        #endif
         return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".carry", isDirectory: true)
     }()
     static let appJSON = dir.appendingPathComponent("app.json")
     static let logs = dir.appendingPathComponent("logs", isDirectory: true)
     static let context = dir.appendingPathComponent("context", isDirectory: true)
+
+    /// True when a DEBUG run points at a scratch home; then the app leaves the real LaunchAgent alone.
+    static var isScratch: Bool {
+        dir.path != FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".carry").path
+    }
 
     /// `~/.carry`, for display.
     static var display: String {
@@ -42,10 +49,13 @@ enum Presence {
 /// Appends timestamped lines to `~/.carry/logs/app.log`.
 enum AppLog {
     static let url = CarryHome.logs.appendingPathComponent("app.log")
+    private static let lock = NSLock()
 
     static func write(_ message: String, detail: [String] = []) {
         var text = "\(RFC3339.string()) \(message)\n"
         for line in detail { text += "  \(line)\n" }
+        lock.lock()
+        defer { lock.unlock() }
         let fm = FileManager.default
         try? fm.createDirectory(at: CarryHome.logs, withIntermediateDirectories: true)
         if !fm.fileExists(atPath: url.path) { fm.createFile(atPath: url.path, contents: nil) }
@@ -84,20 +94,34 @@ enum FullDiskAccess {
             return probe("\(home)/Library/Safari/History.db") != .denied
         }
     }
+
+    /// macOS keeps a running process's verdict until it relaunches. A child process (attributed to this app)
+    /// gets a fresh one, so this says whether the switch is on even when `check()` still says no.
+    static func checkFromChild() -> Bool {
+        let home = NSHomeDirectory()
+        let target = FileManager.default.fileExists(atPath: "\(home)/Library/Messages/chat.db")
+            ? "\(home)/Library/Messages/chat.db" : "\(home)/Library/Safari/History.db"
+        guard FileManager.default.fileExists(atPath: target) else { return true }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/dd")
+        p.arguments = ["if=\(target)", "of=/dev/null", "bs=1", "count=1"]
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError = FileHandle.nullDevice
+        do {
+            try p.run()
+            p.waitUntilExit()
+            return p.terminationStatus == 0
+        } catch {
+            return false
+        }
+    }
 }
 
-/// The CLI's heartbeat to the phone, `heartbeat/<mac-host>.json` in the iCloud container.
+/// The engine's heartbeat to the phone, `heartbeat/<mac-host>.json` in the iCloud container.
 enum HeartbeatFile {
-    static let dir = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Mobile Documents/iCloud~app~carry~ios/Documents/heartbeat", isDirectory: true)
+    static var dir: URL { CarryPaths.container.appendingPathComponent("heartbeat", isDirectory: true) }
 
-    /// Same rule as the CLI: `socket.gethostname()` before the first dot.
-    static var hostName: String {
-        var buffer = [CChar](repeating: 0, count: 256)
-        gethostname(&buffer, buffer.count - 1)
-        let full = String(cString: buffer)
-        return full.split(separator: ".").first.map(String.init) ?? full
-    }
+    static var hostName: String { Container.hostName }
 
     /// This Mac's heartbeat, else the most recently written one (host name changed), else nil.
     static func load() -> Heartbeat? {
@@ -121,8 +145,9 @@ enum HeartbeatFile {
 
 /// The CLI's own scheduler, `~/Library/LaunchAgents/app.carry.sync.plist`. The app replaces it.
 enum LaunchAgent {
+    static let label = "app.carry.sync"
     static let plist = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/LaunchAgents/app.carry.sync.plist")
+        .appendingPathComponent("Library/LaunchAgents/\(label).plist")
 
     static var isInstalled: Bool { FileManager.default.fileExists(atPath: plist.path) }
 
@@ -132,6 +157,74 @@ enum LaunchAgent {
               let dict = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
               let env = dict["EnvironmentVariables"] as? [String: Any] else { return false }
         return env["CARRY_PRO"] as? String == "1"
+    }
+
+    /// `carry agent uninstall`: bootout, then remove the plist.
+    @discardableResult
+    static func uninstall() -> Bool {
+        guard isInstalled else { return false }
+        _ = Shell.run("/bin/launchctl", ["bootout", "gui/\(getuid())", plist.path], timeout: 20)
+        try? FileManager.default.removeItem(at: plist)
+        return !isInstalled
+    }
+}
+
+/// Running a helper the user already has (`claude`), with no shell.
+enum Shell {
+    struct Outcome {
+        let exitCode: Int32
+        let output: String
+        var ok: Bool { exitCode == 0 }
+        /// The last non-empty line.
+        var tail: String {
+            output.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.last { !$0.isEmpty } ?? ""
+        }
+    }
+
+    static var searchPath: String {
+        "\(NSHomeDirectory())/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+    }
+
+    /// `~/.local/bin/<name>`, `/opt/homebrew/bin/<name>`, `/usr/local/bin/<name>`, then PATH.
+    static func locate(_ name: String) -> String? {
+        var candidates = ["\(NSHomeDirectory())/.local/bin/\(name)", "/opt/homebrew/bin/\(name)", "/usr/local/bin/\(name)"]
+        let path = ProcessInfo.processInfo.environment["PATH"] ?? ""
+        candidates += path.split(separator: ":").map { "\($0)/\(name)" }
+        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+    }
+
+    static func run(_ executable: String, _ arguments: [String], timeout: TimeInterval = 60) -> Outcome {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        var environment = ProcessInfo.processInfo.environment
+        environment["PATH"] = searchPath
+        environment["HOME"] = NSHomeDirectory()
+        process.environment = environment
+        process.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
+        process.standardInput = FileHandle.nullDevice
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        do {
+            try process.run()
+        } catch {
+            return Outcome(exitCode: -1, output: "could not start \(executable): \(error.localizedDescription)")
+        }
+        let watchdog = DispatchWorkItem { if process.isRunning { process.terminate() } }
+        DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: watchdog)
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        watchdog.cancel()
+        return Outcome(exitCode: process.terminationStatus, output: String(decoding: data, as: UTF8.self))
+    }
+
+    static func runAsync(_ executable: String, _ arguments: [String], timeout: TimeInterval = 60) async -> Outcome {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                continuation.resume(returning: run(executable, arguments, timeout: timeout))
+            }
+        }
     }
 }
 

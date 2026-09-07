@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Header, Full Disk Access, iPhone, Sources, Pro, footer. Paper background, serif section titles.
+/// Header, Full Disk Access, iPhone, Sources, Pro, For agents, footer. Paper background, serif section titles.
 struct MainView: View {
     let model: AppModel
 
@@ -8,11 +8,11 @@ struct MainView: View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 22) {
                 HeaderView(model: model)
-                EngineCard(model: model)
                 Titled("Full Disk Access") { FDACard(model: model) }
                 Titled("iPhone") { PhoneCard(model: model) }
                 Titled("Sources", note: sourcesNote) { SourcesCard(model: model) }
                 Titled("Pro") { ProCard(model: model) }
+                Titled("For agents") { AgentsCard(model: model) }
                 FooterView(model: model)
             }
             .padding(.horizontal, 28)
@@ -51,52 +51,8 @@ struct HeaderView: View {
             Spacer(minLength: 16)
             Button("Sync now") { Task { await model.sync(reason: "manual") } }
                 .buttonStyle(SecondaryButtonStyle())
-                .disabled(model.isSyncing || model.cliPath == nil)
+                .disabled(model.isSyncing)
                 .padding(.top, 8)
-        }
-    }
-}
-
-// MARK: - Engine (only when carry is missing or too old)
-
-struct EngineCard: View {
-    let model: AppModel
-
-    var body: some View {
-        switch model.engine {
-        case .ready:
-            EmptyView()
-        case .missing:
-            Titled("Install the engine") {
-                Card {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Carry for Mac drives the carry command line, and it is not installed yet.")
-                            .font(.bodyText).foregroundStyle(Theme.ink)
-                        CodeLine(CarryCLI.installCommand)
-                        Text("Then run carry init once in a terminal. This window looks again every 5 seconds.")
-                            .font(.small).foregroundStyle(Theme.ink2)
-                        LinkText("Install notes on \(Links.siteLabel)", url: Links.site)
-                    }
-                }
-            }
-        case .outdated(let version):
-            Titled("Update the engine") {
-                Card {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("carry \(version) is older than this app.").font(.bodyText).foregroundStyle(Theme.ink)
-                        CodeLine(CarryCLI.upgradeCommand)
-                    }
-                }
-            }
-        case .failed(let message):
-            Titled("The engine did not answer") {
-                Card {
-                    VStack(alignment: .leading, spacing: 10) {
-                        StatusLine("carry status --json: \(message)", color: Theme.warn)
-                        Text("Details in \(CarryHome.display)/logs/app.log.").font(.small).foregroundStyle(Theme.ink2)
-                    }
-                }
-            }
         }
     }
 }
@@ -111,23 +67,30 @@ struct FDACard: View {
             VStack(alignment: .leading, spacing: 10) {
                 if model.fdaGrantedForDisplay {
                     CheckLine("Granted · Carry reads \(FullDiskAccess.covers)")
-                    Text("Every sync this app starts inherits it. Nothing to add to the list, no interpreter path.")
+                    Text("Read here, in this app. Nothing to add to the list, no interpreter path.")
                         .font(.small).foregroundStyle(Theme.ink2)
                     if let blocked = model.status?.blocked, !blocked.isEmpty {
-                        Note("The last sync ran outside this app and could not read \(blocked.joined(separator: ", ")). "
-                             + "The next one from here will.")
+                        Note("The last sync could not read \(blocked.joined(separator: ", ")). The next one will.")
                     }
                 } else {
                     Text("Messages, Notes, Voice Memos, Calendar, Reminders, Safari and Screen Time sit in databases "
                          + "macOS keeps behind one switch. Carry reads them there; it never writes to them.")
                         .font(.bodyText).foregroundStyle(Theme.ink)
                         .fixedSize(horizontal: false, vertical: true)
-                    HStack(spacing: 12) {
-                        Button("Grant in System Settings") { model.grantFDA() }
-                            .buttonStyle(PrimaryButtonStyle())
-                        if model.fdaWaiting {
-                            StatusLine("Waiting… Privacy & Security → Full Disk Access → Carry", color: Theme.warn)
-                            Button("Stop") { model.stopWaitingForFDA() }.buttonStyle(QuietButtonStyle())
+                    if model.fdaNeedsRelaunch {
+                        HStack(spacing: 12) {
+                            Button("Relaunch Carry") { model.relaunch() }
+                                .buttonStyle(PrimaryButtonStyle())
+                            StatusLine("Switch is on. macOS applies it to a fresh start.", color: Theme.ok)
+                        }
+                    } else {
+                        HStack(spacing: 12) {
+                            Button("Grant in System Settings") { model.grantFDA() }
+                                .buttonStyle(PrimaryButtonStyle())
+                            if model.fdaWaiting {
+                                StatusLine("Waiting… Privacy & Security → Full Disk Access → Carry", color: Theme.warn)
+                                Button("Stop") { model.stopWaitingForFDA() }.buttonStyle(QuietButtonStyle())
+                            }
                         }
                     }
                     Text("One switch, once. macOS doesn't let any app flip it for you.")
@@ -192,14 +155,13 @@ struct SourcesCard: View {
         Card(padding: 0) {
             let rows = model.sources
             if rows.isEmpty {
-                Text(model.cliPath == nil ? "The twelve sources appear once carry is installed."
-                                          : "Reading sources…")
+                Text("Reading sources…")
                     .font(.small).foregroundStyle(Theme.ink2)
                     .padding(14)
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                        SourceRowView(row: row, disabled: model.decidedOnPhone || model.cliPath == nil) { on in
+                        SourceRowView(row: row, disabled: model.decidedOnPhone) { on in
                             model.setSource(row.name, enabled: on)
                         }
                         if index < rows.count - 1 { Hairline(inset: 14) }
@@ -285,6 +247,55 @@ struct ProCard: View {
     }
 }
 
+// MARK: - For agents
+
+struct AgentsCard: View {
+    let model: AppModel
+
+    var body: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Files first: point any agent at \(CarryHome.display)/context/. This paragraph goes in CLAUDE.md or AGENTS.md.")
+                    .font(.bodyText).foregroundStyle(Theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                CodeBlock(Engine.agentSnippet)
+                Hairline()
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    if model.claudePath != nil {
+                        Button("Add to Claude Code") { model.addToClaudeCode() }.buttonStyle(SecondaryButtonStyle())
+                        if let result = model.claudeResult {
+                            StatusLine(result, color: Theme.ink2)
+                        } else {
+                            Text("Runs claude mcp add for you.").font(.small).foregroundStyle(Theme.ink2)
+                        }
+                    } else {
+                        Text("Claude Code").font(.bodyMedium).foregroundStyle(Theme.ink)
+                        Text("run once in a terminal:").font(.small).foregroundStyle(Theme.ink2)
+                    }
+                }
+                if model.claudePath == nil {
+                    CodeLine(AppModel.claudeAddCommand)
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text("Codex").font(.bodyMedium).foregroundStyle(Theme.ink)
+                    Text("add to ~/.codex/config.toml:").font(.small).foregroundStyle(Theme.ink2)
+                    if model.codexConfigExists {
+                        Button(model.codexAlreadyThere ? "Already in config.toml" : "Append for me") { model.appendToCodex() }
+                            .buttonStyle(QuietButtonStyle())
+                            .disabled(model.codexAlreadyThere)
+                    }
+                }
+                CodeBlock(AppModel.codexBlock.trimmingCharacters(in: .newlines))
+                if let result = model.codexResult {
+                    StatusLine(result, color: Theme.ink2)
+                }
+                StatusLine("MCP: \(MCPServer.url) · \(model.mcpRunning ? "running while Carry runs" : "not running")",
+                           color: model.mcpRunning ? Theme.ink2 : Theme.warn)
+            }
+        }
+    }
+}
+
 // MARK: - Footer
 
 struct FooterView: View {
@@ -317,7 +328,7 @@ struct FooterView: View {
             } else if let error = model.loginItemError {
                 Note("Run at login: \(error)")
             }
-            StatusLine("Runs carry sync every \(model.scheduleMinutes) min while awake, at launch and after wake.",
+            StatusLine("Syncs every \(model.scheduleMinutes) min while awake, at launch and after wake.",
                        color: Theme.ink2)
             HStack(spacing: 16) {
                 StatusLine(versionLine, color: Theme.ink2)
@@ -329,9 +340,6 @@ struct FooterView: View {
     }
 
     private var versionLine: String {
-        var parts = ["Carry \(AppModel.appVersion)"]
-        if let cli = model.cliVersion { parts.append("carry \(cli)") }
-        parts.append("\(CarryHome.display)/logs/app.log")
-        return statusJoin(parts)
+        statusJoin(["Carry \(AppModel.appVersion)", "\(CarryHome.display)/logs/app.log"])
     }
 }

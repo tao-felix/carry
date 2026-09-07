@@ -67,11 +67,19 @@
             isEnabled = "NO">
          </CommandLineArgument>
          <CommandLineArgument
+            argument = "-carryNoProcess 1"
+            isEnabled = "NO">
+         </CommandLineArgument>
+         <CommandLineArgument
             argument = "-carryPreview 1"
             isEnabled = "NO">
          </CommandLineArgument>
          <CommandLineArgument
             argument = "-carrySnapshot /tmp/carry-main.png"
+            isEnabled = "NO">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "-carrySyncAndQuit 1"
             isEnabled = "NO">
          </CommandLineArgument>
       </CommandLineArguments>

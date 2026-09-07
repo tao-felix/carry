@@ -1,52 +1,42 @@
 # Carry for Mac
 
-The menu bar face of the `carry` CLI. A luggage tag in the menu bar, one window, no Dock icon. It exists for one reason: **Full Disk Access**.
+The Mac half of Carry, complete in one app: a luggage tag in the menu bar, one window, no Dock icon, and the whole engine inside. A person installs Carry.app and the Carry iPhone app and never opens a terminal.
 
-macOS only lets the *user* grant Full Disk Access, in System Settings, and it attributes file access to the process that launchd or the user started. The CLI's own LaunchAgent runs a bare Python interpreter, so granting it means adding an ugly interpreter path to the FDA list, and it changes every time `uv` reinstalls the tool. With this app the user flips one switch for "Carry", once. Every `carry sync` the app spawns is a child of the app, and macOS attributes the child's reads to the app, so the grant is inherited. The app then replaces the LaunchAgent as the scheduler and shows what is going on.
-
-The CLI stays the engine. The app never reads a database itself; it runs `carry` and renders the answers.
+The engine is a Swift port of the Python reference in `cli/src/carry/` (`docs/ENGINE.md` is the contract). Both write the same `~/.carry/carry.db` rows (same ids, same fields) and byte-for-byte the same `~/.carry/context/*.md`, so an agent cannot tell which one wrote them. The CLI stays the open-source reference and the headless path.
 
 ## What it does
 
-- **Status**: `carry status --json` every minute and after every sync. Title, mono status line (`Last sync 00:42 · photos 252 · screenshots 95 · Pro`), the twelve sources with channel badges (`via iCloud` in moss, `via Carry app` in tangerine), item counts, per-source errors, the iPhone that last wrote to the iCloud container, Pro state and reason.
-- **Sync**: `carry sync --quiet` at launch, after wake (`NSWorkspace.didWakeNotification`), every 5 / 15 / 30 / 60 minutes (default 15, stored in UserDefaults), and on "Sync now". Never two at once. While one runs the menu bar tag shows a dot and the status line reads `Syncing… since 00:41`. Each run's exit code and the last 20 lines of output go to `~/.carry/logs/app.log`.
-- **Sources**: toggles call `carry sources <name> --on|--off`. When the iPhone app's `sources.json` is present (`decided_by == "phone"`) the toggles are disabled and the card says so; the phone wins, as the data contract says.
-- **Run at login**: `SMAppService.mainApp.register()` / `unregister()`, reflecting `.status`; if macOS wants approval, the footer says so and links to Login Items.
-- **Open context folder**: reveals `~/.carry/context/` in Finder.
-- **Menu bar menu**: status line, Sync now, Open Carry, Open context folder, Quit.
-
-Everything the user sees says what is read, where it goes, and who sees it. The window's first lines: *Read: the sources switched on below. Goes to: ~/.carry/context/ on this Mac. Seen by: the agents you point at it. Nobody else. There is no Carry server.*
+- **Reads** (read-only, never copied): Photos and Screenshots from `Photos.sqlite`; with Full Disk Access also Voice Memos, Notes (gzip + protobuf body), Messages (typedstream bodies, names from Contacts), Calendar (occurrence cache), Reminders, Safari, Screen Time (`knowledgeC.db`). Plus everything the iPhone app wrote to the iCloud container: Health, Location, Share inbox, `sources.json`, `manifest.json`, `license.json`; and Health Auto Export JSON as a fallback.
+- **Processing** (Pro): OCR with Vision (`VNRecognizeTextRequest`, accurate, zh-Hans / en-US / ja-JP, confidence ≥ 0.3) for screenshots, inbox images and, when `ocr_photos` is on, photos. Transcription with `SpeechAnalyzer` + `SpeechTranscriber` on macOS 26 (on-device, long-form; a 78-minute memo takes about 75 s), `SFSpeechRecognizer` over ≤ 60 s chunks on macOS 14/15. A transcriber speaks one language, so with several preferred languages the engine transcribes the first 45 s in each and keeps the one with the highest confidence. Cap 90 minutes per recording, 3 per run; audio is copied to `~/.carry/tmp/` first.
+- **Digest**: `~/.carry/context/YYYY-MM-DD.md` for the last 7 days, `latest.md` (symlink), `week.md`, `README.md`, section order and wording exactly as `digest.py`.
+- **Store**: `~/.carry/carry.db`, system `libsqlite3`, WAL, FTS5 trigram, the schema and triggers of `store.py`, the "never overwrite processed text" rule, per-source cursors.
+- **License**: `license.json` (StoreKit 2 JWS) verified offline, chain to the embedded Apple Root CA G3, ES256 over `header.payload`, product id `app.carry.pro` / `app.carry.pro.annual`, 3-day grace. Developer override: `defaults write app.carry.mac CarryProOverride -bool true` (the old `CARRY_PRO` defaults key migrates once) or `CARRY_PRO=1` in the environment.
+- **MCP**: Streamable HTTP on `http://127.0.0.1:47850/mcp` while the app runs (loopback only, non-localhost `Origin` refused). Tools `digest`, `search`, `recent`, `item`, `sources`; resource `carry://digest/today`; same schemas and result text as `mcp_server.py`. `POST` JSON-RPC 2.0 answered with `application/json`; notifications get `202`; `GET` gets `405` (no SSE stream).
+- **Heartbeat**: `heartbeat/<host>.json` in the container after every sync, same host rule as the CLI.
+- **Sync**: at launch, after wake, every 5 / 15 / 30 / 60 minutes (default 15), and on "Sync now". Never two at once. Errors land in `sync_state.last_error` with the CLI's wording ("… Grant Full Disk Access."). The last lines of every run go to `~/.carry/logs/app.log`.
+- **Sources**: toggles write `[sources]` in `~/.carry/config.toml` with the CLI's layout, so `carry` and the app agree. When the iPhone's `sources.json` is present it wins and the toggles are disabled.
+- **Window**: status line, Full Disk Access card, iPhone card, the twelve sources with channel badges, Pro card (engine license status), **For agents** card, footer (context folder, Run at login, schedule). Everything says what is read, where it goes, who sees it.
 
 ## The Full Disk Access flow
 
-Detection is a real read attempt: `open(2)` on `~/Library/Messages/chat.db`. `EPERM` means not granted; `ENOENT` (never used Messages) falls back to `~/Library/Safari/History.db`; if that does not exist either there is nothing to protect and it counts as granted. The CLI does the same check in its own process and reports it as `fda` in the status JSON.
+Detection is a real read attempt: `open(2)` on `~/Library/Messages/chat.db` (`EPERM` → not granted; `ENOENT` → try `~/Library/Safari/History.db`; neither → nothing to protect). "Grant in System Settings" performs that read (so macOS lists Carry in the pane), opens `x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles`, and polls every 2 seconds.
 
-"Grant in System Settings":
+macOS keeps a running process's verdict until it relaunches, so the poll asks twice: the in-process probe, and a child process (`/bin/dd` reading one byte; children are attributed to the app and get a fresh verdict). When only the child says yes, the card shows **Relaunch Carry**; the fresh instance syncs with the grant. Copy stays honest: *One switch, once. macOS doesn't let any app flip it for you.*
 
-1. performs that read attempt first, which is what makes macOS list "Carry" in the Full Disk Access pane;
-2. opens `x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles`;
-3. polls every 2 seconds. macOS applies a new grant to processes started afterwards and may keep the running app's own verdict cached until relaunch, so the poll asks both: the in-process probe and a fresh `carry status --json` child. As soon as either says yes the card shows the moss check, a sync runs, and the CLI's LaunchAgent (if still installed) is removed with `carry agent uninstall`.
+## For agents
 
-Why it must be a user action: TCC has no API to grant Full Disk Access. Any app that could flip the switch would defeat the switch. So the copy is honest: *One switch, once. macOS doesn't let any app flip it for you.* And it says what works without it: Photos, Screenshots, and everything from the iPhone.
+- The CLAUDE.md / AGENTS.md paragraph with Copy.
+- **Add to Claude Code**: if `claude` exists (`~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin`, `PATH`) the app runs `claude mcp add --transport http carry http://127.0.0.1:47850/mcp` and shows the result line; otherwise it shows the command with Copy.
+- **Codex**: the `[mcp_servers.carry]` TOML block with Copy; if `~/.codex/config.toml` exists, "Append for me" backs it up to `config.toml.bak` first (disabled when the table is already there).
+- A mono line: `MCP: http://127.0.0.1:47850/mcp · running while Carry runs`.
 
-## How the app and the CLI's LaunchAgent coexist
+## Coexistence with the CLI
 
-`~/.carry/app.json` is the handshake:
-
-```json
-{"pid": 123, "version": "0.1.0", "last_seen": "2026-09-08T00:40:00+08:00"}
-```
-
-- The app writes it at launch and every minute, and deletes it on quit. The CLI treats it as stale after 3 minutes or when the pid is gone.
-- `carry init` sees it and does not install the LaunchAgent ("Carry for Mac is running and will schedule the sync itself"). `carry status` reports `app_running` and names the scheduler.
-- When the app starts and finds `agent_installed: true`, it runs `carry agent uninstall` once and logs it. While the app runs, it is the scheduler. If the app is quit and Run at login is off, nothing syncs in the background; run `carry agent install` to go back to the LaunchAgent, or turn Run at login on.
-- If the agent's plist carried the developer override `CARRY_PRO=1`, the app keeps it (`defaults write app.carry.mac CARRY_PRO 1`) and passes it to every `carry` it runs, so Pro processing does not silently stop. `defaults delete app.carry.mac CARRY_PRO` turns it off.
-
-Children get `PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:~/.local/bin` and the inherited `HOME`; no shell is involved. The executable is looked up at `~/.local/bin/carry`, `/opt/homebrew/bin/carry`, `/usr/local/bin/carry`, then `PATH`. If it is missing, the window shows `uv tool install carry-context` with a Copy button and looks again every 5 seconds. If `carry status --json` is not understood, it shows the upgrade command instead.
+`~/.carry/app.json` (`{"pid", "version", "last_seen"}`) is written at launch and every minute and removed on quit. `carry init` sees it and skips its LaunchAgent; `carry status` says "scheduler: Carry for Mac". If the CLI's LaunchAgent is installed when the app starts, the app removes it once (`launchctl bootout` + delete the plist) and keeps a `CARRY_PRO=1` it carried as `CarryProOverride`. If both run anyway, WAL and stable ids make double writes harmless.
 
 ## Build and run
 
-Requirements: Xcode 26 (SwiftUI, macOS 14+), [xcodegen](https://github.com/yonaskolb/XcodeGen). No third-party dependencies.
+Requirements: Xcode 26 (SwiftUI, macOS 14+ deployment target, macOS 26 SDK for SpeechAnalyzer), [xcodegen](https://github.com/yonaskolb/XcodeGen). No third-party dependencies: `libsqlite3`, Vision, Speech, AVFoundation, Network, Security, Compression, CryptoKit.
 
 ```bash
 cd mac
@@ -55,25 +45,46 @@ xcodebuild -project CarryMac.xcodeproj -scheme Carry -configuration Debug -deriv
 open build/Build/Products/Debug/Carry.app
 ```
 
-The window opens on the first launch ever and whenever something needs the user (no `carry`, no Full Disk Access); otherwise the app sits in the menu bar and "Open Carry" brings the window.
+DEBUG-only launch arguments (see `project.yml`): `-carryAppearance dark`, `-carryPreview 1` (ungranted FDA card and a sample iPhone), `-carrySnapshot /path.png` (window PNG after `-carrySnapshotDelay` seconds, default 3), `-carryScroll bottom`, `-carryNoProcess 1` (skip OCR / transcription), `-carrySyncAndQuit 1` (sync once and exit). DEBUG builds also honour `CARRY_HOME` and `CARRY_CONTAINER` from the environment, and `-CarryProOverride 0|1` as a defaults argument. With a scratch `CARRY_HOME` the app leaves the real LaunchAgent alone.
 
-DEBUG-only launch arguments (see `project.yml`), used for screenshots: `-carryAppearance dark`, `-carryPreview 1` (renders the ungranted FDA card and a sample iPhone), `-carrySnapshot /path.png` (writes the window content 3 s after launch, or `-carrySnapshotDelay N`), `-carryScroll bottom`.
+### Parity test against the CLI
 
-Files: `Carry/CarryApp.swift` (entry, MenuBarExtra, AppDelegate), `AppModel.swift` (state, scheduler, FDA flow, actions), `CarryCLI.swift` (finding and running `carry`), `Models.swift` (JSON shapes), `Support.swift` (presence file, log, FDA probe, heartbeat, LaunchAgent plist, links), `MainWindow.swift`, `MainView.swift` (the sections), `MenuContent.swift`, `MenuBarIcon.swift`, `Theme.swift` and `UI.swift` (the design system from `docs/DESIGN.md`, mirroring `ios/CarryKit/UI.swift`).
+Run the Python reference and the app into two scratch homes and diff:
+
+```bash
+CARRY_HOME=/tmp/carry-parity-py CARRY_PRO=0 carry sync --no-process -q
+CARRY_HOME=/tmp/carry-parity-swift build/Build/Products/Debug/Carry.app/Contents/MacOS/Carry \
+  -carryNoProcess 1 -carrySyncAndQuit 1 -CarryProOverride 0
+diff <(sqlite3 /tmp/carry-parity-py/carry.db "select id,source,kind,ts,ts_end,day,title,text,meta,path,device,processed from items order by id") \
+     <(sqlite3 /tmp/carry-parity-swift/carry.db "select id,source,kind,ts,ts_end,day,title,text,meta,path,device,processed from items order by id")
+diff /tmp/carry-parity-py/context/$(date +%F).md /tmp/carry-parity-swift/context/$(date +%F).md   # only the "generated …" line may differ
+```
+
+Both must be empty (apart from the timestamp line). The same test with `CARRY_CONTAINER=` pointing at a folder shaped like the iCloud container (plus `health_auto_export_dir` in `config.toml`) covers Health, Location, inbox, Health Auto Export and the heartbeat; with `messages = true` / `safari = true` in `config.toml` it covers those readers.
+
+### MCP smoke test
+
+```bash
+curl -s -X POST http://127.0.0.1:47850/mcp -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"0"}}}'
+curl -s -X POST http://127.0.0.1:47850/mcp -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+curl -s -X POST http://127.0.0.1:47850/mcp -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"search","arguments":{"query":"分身"}}}'
+claude mcp add --transport http carry http://127.0.0.1:47850/mcp && claude mcp list
+```
+
+## Files
+
+- `Carry/CarryApp.swift` (entry, MenuBarExtra, AppDelegate, DEBUG arguments), `AppModel.swift` (state, scheduler, FDA flow, agents actions), `Models.swift` (status shapes), `Support.swift` (home, presence file, log, FDA probes, heartbeat file, LaunchAgent, `Shell`), `MainWindow.swift`, `MainView.swift` (the cards), `MenuContent.swift`, `MenuBarIcon.swift`, `Theme.swift`, `UI.swift` (design system from `docs/DESIGN.md`).
+- `Carry/Engine/`: `Util.swift` (Python-exact time, ids, whitespace, excerpts, float repr, ordered JSON), `SQLite.swift`, `Store.swift`, `Config.swift` (source registry, TOML, `sources.json` policy), `Apps.swift`, `Decoders.swift` (typedstream, Notes protobuf, gunzip), `Readers/` (one file per Apple source), `Container.swift` (iCloud container, Health Auto Export, heartbeat), `Processing/` (`VisionOCR.swift`, `Transcribe.swift`, `Processing.swift`), `License.swift`, `Digest.swift`, `Sync.swift` (the engine: sync, status, sources), `MCPServer.swift`.
 
 ## Signing, notarization, distribution
 
-The project leaves `DEVELOPMENT_TEAM` empty and hardened runtime off so it builds anywhere. Before handing the app to anyone:
+The project leaves hardened runtime off so it builds anywhere. Before handing the app to anyone:
 
-1. **Developer ID**. Set `DEVELOPMENT_TEAM` in `project.yml`, sign with a Developer ID Application certificate. This matters beyond Gatekeeper: TCC keys the Full Disk Access grant to the app's code signature (designated requirement). A stable Developer ID identity keeps the grant across updates; ad-hoc or unsigned builds can lose it when the binary changes, and the user has to flip the switch again.
-2. **Hardened runtime**. Set `ENABLE_HARDENED_RUNTIME: YES`. The app needs no entitlements beyond that: it is not sandboxed (it must read `~/.carry`, run `~/.local/bin/carry`, and probe `~/Library/Messages/chat.db`), and `SMAppService.mainApp` needs none.
-3. **Notarize and staple**.
-   ```bash
-   xcodebuild -project CarryMac.xcodeproj -scheme Carry -configuration Release -derivedDataPath build build
-   ditto -c -k --keepParent build/Build/Products/Release/Carry.app Carry.zip
-   xcrun notarytool submit Carry.zip --keychain-profile "AC_PASSWORD" --wait
-   xcrun stapler staple build/Build/Products/Release/Carry.app
-   ```
-4. Ship as a zip or a DMG. Keep `LSUIElement` true; the Dock stays empty on purpose.
+1. **Developer ID**. Sign with a Developer ID Application certificate. TCC keys the Full Disk Access grant to the app's code signature; a stable identity keeps the grant across updates.
+2. **Hardened runtime**. `ENABLE_HARDENED_RUNTIME: YES`. No entitlements beyond that: the app is not sandboxed (it reads `~/.carry`, Apple's databases, the iCloud container) and `SMAppService.mainApp` needs none. `NSSpeechRecognitionUsageDescription` is in `Info.plist` for the macOS 14/15 transcription path.
+3. **Notarize and staple**, then ship as a DMG: `scripts/release.sh`, verify with `scripts/verify-dmg.sh`.
+4. Keep `LSUIElement` true; the Dock stays empty on purpose.
 
-No App Store: Full Disk Access and running a user-installed CLI are outside the sandbox.
+No App Store: Full Disk Access is outside the sandbox.

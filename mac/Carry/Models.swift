@@ -1,22 +1,16 @@
 import Foundation
 
-// The shapes `carry status --json` and `carry sources --json` emit (cli/src/carry/cli.py).
-// Every field is optional so an older or newer CLI degrades to "unknown", never to a crash.
+// The shapes the engine hands the window (the same fields `carry status --json` prints, cli.py `_status_payload`).
 
 /// How a source reaches the Mac. Two channels, two colors (docs/DESIGN.md).
-enum Channel: String, Decodable {
+enum Channel: String {
     case icloud
     case app
-
-    init(from decoder: Decoder) throws {
-        let raw = try decoder.singleValueContainer().decode(String.self)
-        self = Channel(rawValue: raw) ?? .icloud
-    }
 
     var badge: String { self == .icloud ? "via iCloud" : "via Carry app" }
 }
 
-struct SourceRow: Decodable, Identifiable {
+struct SourceRow: Identifiable {
     let name: String
     let label: String
     let channel: Channel
@@ -28,20 +22,20 @@ struct SourceRow: Decodable, Identifiable {
     var id: String { name }
 }
 
-struct ProStatus: Decodable {
+struct ProStatus {
     let active: Bool
     let reason: String?
     let expiresAt: String?
 }
 
-struct PhoneInfo: Decodable {
+struct PhoneInfo {
     let name: String?
     let os: String?
     let appVersion: String?
     let updatedAt: String?
 }
 
-struct CarryStatus: Decodable {
+struct CarryStatus {
     let version: String?
     let home: String?
     let contextDir: String?
@@ -60,7 +54,7 @@ struct CarryStatus: Decodable {
     var pendingTotal: Int { pending?.values.reduce(0, +) ?? 0 }
 }
 
-/// `heartbeat/<mac-host>.json`, written by the CLI for the phone (docs/DATA-CONTRACT.md §8).
+/// `heartbeat/<mac-host>.json`, written by the engine for the phone (docs/DATA-CONTRACT.md §8).
 struct Heartbeat: Decodable {
     let host: String
     let carryVersion: String?
@@ -68,7 +62,7 @@ struct Heartbeat: Decodable {
 }
 
 extension JSONDecoder {
-    /// snake_case JSON from the CLI into the camelCase fields above.
+    /// snake_case JSON into the camelCase fields above.
     static let carry: JSONDecoder = {
         let d = JSONDecoder()
         d.keyDecodingStrategy = .convertFromSnakeCase

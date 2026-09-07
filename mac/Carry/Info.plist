@@ -30,6 +30,8 @@
 	<string>MIT. No Carry server.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Carry turns your voice memos into text on this Mac, with Pro. Nothing is sent anywhere.</string>
 	<key>NSSupportsAutomaticTermination</key>
 	<false/>
 	<key>NSSupportsSuddenTermination</key>

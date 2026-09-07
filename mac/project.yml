@@ -36,6 +36,12 @@ targets:
     platform: macOS
     sources:
       - path: Carry
+    dependencies:
+      - sdk: libsqlite3.tbd
+      - sdk: Vision.framework
+      - sdk: Speech.framework
+      - sdk: Network.framework
+      - sdk: AVFoundation.framework
     settings:
       base:
         PRODUCT_NAME: Carry
@@ -54,5 +60,7 @@ schemes:
         "-carryAppearance dark": false
         "-carryPreview 1": false
         "-carrySnapshot /tmp/carry-main.png": false
+        "-carryNoProcess 1": false
+        "-carrySyncAndQuit 1": false
     archive:
       config: Release

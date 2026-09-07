@@ -6,34 +6,21 @@ import SwiftUI
 /// What the last sync this app ran came to.
 struct SyncOutcome {
     let endedAt: Date
-    let exitCode: Int32
-    let tail: String
-    var ok: Bool { exitCode == 0 }
+    let ok: Bool
+    let summary: String
 }
 
-/// Is the engine there and does it speak our JSON?
-enum EngineState: Equatable {
-    case ready
-    case missing
-    case outdated(version: String)
-    case failed(String)
-}
-
-/// All app state and every action. One instance, on the main actor. Views read it; timers and the CLI feed it.
+/// All app state and every action. One instance, on the main actor. Views read it; timers and the engine feed it.
 @MainActor @Observable
 final class AppModel {
     static let shared = AppModel()
 
-    static let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
+    static let appVersion = Engine.version
     static let scheduleChoices = [5, 15, 30, 60]
     private static let scheduleKey = "scheduleMinutes"
     private static let launchedKey = "hasLaunchedBefore"
-    private static let proOverrideKey = "CARRY_PRO"
 
     // Engine
-    private(set) var cliPath: String?
-    private(set) var cliVersion: String?
-    private(set) var engine: EngineState = .missing
     private(set) var status: CarryStatus?
 
     // Sync
@@ -47,6 +34,8 @@ final class AppModel {
     // Full Disk Access
     private(set) var fdaGranted = FullDiskAccess.check()
     private(set) var fdaWaiting = false
+    /// The switch is on, but this running process still holds the old verdict.
+    private(set) var fdaNeedsRelaunch = false
 
     // Login item and schedule
     private(set) var loginItemStatus = SMAppService.mainApp.status
@@ -60,12 +49,22 @@ final class AppModel {
     private(set) var sourceOverrides: [String: Bool] = [:]
     private(set) var sourceNote: String?
 
+    // For agents
+    private(set) var claudePath: String? = Shell.locate("claude")
+    private(set) var claudeResult: String?
+    private(set) var codexResult: String?
+    var codexConfigExists: Bool { FileManager.default.fileExists(atPath: Self.codexConfig.path) }
+    var mcpRunning: Bool { MCPServer.shared.isRunning }
+
     // Bookkeeping
     private var timer: Timer?
     private var lastPresenceWrite: Date?
     private var tookOverScheduling = false
     /// DEBUG: render the "not granted" Full Disk Access card and a sample iPhone for screenshots.
     var previewMode = false
+    /// DEBUG: `-carryNoProcess 1` skips OCR / transcription; `-carrySyncAndQuit 1` syncs once and exits.
+    var noProcess = false
+    var syncAndQuit = false
 
     private init() {
         let stored = UserDefaults.standard.integer(forKey: Self.scheduleKey)
@@ -75,9 +74,9 @@ final class AppModel {
     // MARK: - Lifecycle
 
     func start() {
-        AppLog.write("app \(Self.appVersion) launched, pid \(ProcessInfo.processInfo.processIdentifier)")
+        AppLog.write("app \(Self.appVersion) launched, pid \(ProcessInfo.processInfo.processIdentifier), home \(CarryHome.dir.path)")
         writePresence()
-        locateCLI()
+        MCPServer.shared.start()
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil,
                                                           queue: .main) { _ in
             Task { @MainActor in self.didWake() }
@@ -90,34 +89,30 @@ final class AppModel {
 
     func stop() {
         timer?.invalidate()
+        MCPServer.shared.stop()
         Presence.remove()
         AppLog.write("app quit")
     }
 
-    /// Open the window on the first launch ever, and whenever something needs the user (no CLI, no FDA).
+    /// Open the window on the first launch ever, and whenever something needs the user (no FDA).
     var shouldOpenWindowAtLaunch: Bool {
         let first = !UserDefaults.standard.bool(forKey: Self.launchedKey)
         UserDefaults.standard.set(true, forKey: Self.launchedKey)
-        return first || cliPath == nil || !fdaGranted
+        return first || !fdaGranted
     }
 
     private func boot() async {
         await refreshStatus()
-        if cliPath != nil { await sync(reason: "launch") }
+        await sync(reason: "launch")
+        if syncAndQuit {
+            AppLog.write("sync-and-quit: done")
+            NSApp.terminate(nil)
+        }
     }
 
     private func tick() async {
         let now = Date()
         if lastPresenceWrite.map({ now.timeIntervalSince($0) >= 60 }) ?? true { writePresence() }
-        if cliPath == nil {
-            // The install card asks the user to run `uv tool install carry-context`; look again every 5 s.
-            locateCLI()
-            if cliPath != nil {
-                await refreshStatus()
-                await sync(reason: "carry installed")
-            }
-            return
-        }
         if !isSyncing, let started = lastSyncStartedAt, now.timeIntervalSince(started) >= Double(scheduleMinutes * 60) {
             await sync(reason: "every \(scheduleMinutes) min")
             return
@@ -138,100 +133,68 @@ final class AppModel {
         lastPresenceWrite = Date()
     }
 
-    private func locateCLI() {
-        let found = CarryCLI.locate()
-        if found != cliPath { AppLog.write(found.map { "carry found at \($0)" } ?? "carry not found") }
-        cliPath = found
-        if found == nil { engine = .missing }
-    }
-
-    /// The developer override `CARRY_PRO=1`, kept when the app takes over from a LaunchAgent that carried it.
-    private var extraEnvironment: [String: String] {
-        UserDefaults.standard.string(forKey: Self.proOverrideKey) == "1" ? ["CARRY_PRO": "1"] : [:]
-    }
-
     // MARK: - Status
 
     func refreshStatus() async {
-        guard let cli = cliPath, !isRefreshing else { return }
+        guard !isRefreshing else { return }
         isRefreshing = true
         defer { isRefreshing = false }
-        let result = await CarryCLI.run(cli, ["status", "--json"], extraEnvironment: extraEnvironment, timeout: 30)
+        let parsed = await Engine.shared.status()
         lastStatusRefresh = Date()
-        if let parsed = decodeStatus(result) {
+        if let parsed {
             status = parsed
-            engine = .ready
-            cliVersion = parsed.version ?? cliVersion
             sourceOverrides = [:]
-            fdaGranted = (parsed.fda ?? false) || FullDiskAccess.check()
+            fdaGranted = FullDiskAccess.check()
             heartbeat = HeartbeatFile.load()
-            if parsed.agentInstalled == true { await takeOverScheduling(cli) }
+            if parsed.agentInstalled == true { takeOverScheduling() }
         } else {
-            let version = await CarryCLI.version(cli)
-            cliVersion = version
-            let complaint = result.stderr + result.stdout
-            if complaint.contains("--json") || complaint.contains("No such option") {
-                engine = .outdated(version: version ?? "?")
-            } else {
-                engine = .failed(result.tail.isEmpty ? "exit \(result.exitCode)" : result.tail)
-            }
-            AppLog.write("status failed, exit \(result.exitCode)", detail: result.lastLines(8))
+            AppLog.write("status failed: could not open \(CarryPaths.db.path)")
         }
         loginItemStatus = SMAppService.mainApp.status
     }
 
-    private func decodeStatus(_ result: CommandResult) -> CarryStatus? {
-        guard result.ok, let data = result.stdout.data(using: .utf8) else { return nil }
-        return try? JSONDecoder.carry.decode(CarryStatus.self, from: data)
-    }
-
     /// While this app runs it is the scheduler, and every sync it starts inherits its Full Disk Access.
     /// The CLI's LaunchAgent (bare python, no FDA) would only duplicate the work, so remove it once.
-    private func takeOverScheduling(_ cli: String) async {
-        guard !tookOverScheduling else { return }
+    private func takeOverScheduling() {
+        guard !tookOverScheduling, !CarryHome.isScratch else { return }
         tookOverScheduling = true
-        if LaunchAgent.carriesProOverride { UserDefaults.standard.set("1", forKey: Self.proOverrideKey) }
-        let result = await CarryCLI.run(cli, ["agent", "uninstall"], timeout: 30)
-        AppLog.write(result.ok ? "LaunchAgent removed; Carry for Mac schedules the sync now"
-                               : "LaunchAgent not removed, exit \(result.exitCode)", detail: result.lastLines(4))
-        if result.ok { status?.agentInstalled = false }
+        if LaunchAgent.carriesProOverride { UserDefaults.standard.set(true, forKey: License.overrideKey) }
+        let removed = LaunchAgent.uninstall()
+        AppLog.write(removed ? "LaunchAgent removed; Carry for Mac schedules the sync now" : "LaunchAgent not removed")
+        if removed { status?.agentInstalled = false }
     }
 
     // MARK: - Sync
 
     func sync(reason: String) async {
-        guard !isSyncing, let cli = cliPath else { return }
+        guard !isSyncing else { return }
         isSyncing = true
         let started = Date()
         syncStartedAt = started
         lastSyncStartedAt = started
-        AppLog.write("sync start (\(reason))")
-        let result = await CarryCLI.run(cli, ["sync", "--quiet"], extraEnvironment: extraEnvironment)
+        AppLog.write("sync start (\(reason))\(noProcess ? " [no-process]" : "")")
+        var lines: [String] = []
+        let result = await Engine.shared.sync(noProcess: noProcess) { line in lines.append(line) }
         isSyncing = false
-        lastSync = SyncOutcome(endedAt: Date(), exitCode: result.exitCode, tail: String(result.tail.prefix(120)))
-        AppLog.write("sync exit \(result.exitCode) in \(String(format: "%.1f", result.duration)) s",
-                     detail: result.lastLines())
+        switch result {
+        case .success(let r):
+            let failed = r.errors.map { "\($0.0): \($0.1)" }
+            lastSync = SyncOutcome(endedAt: Date(), ok: true, summary: r.summaryLine)
+            AppLog.write("sync done in \(String(format: "%.1f", r.duration)) s", detail: lines + failed)
+        case .failure(let error):
+            lastSync = SyncOutcome(endedAt: Date(), ok: false, summary: "\(error)")
+            AppLog.write("sync failed: \(error)", detail: lines)
+        }
         await refreshStatus()
     }
 
     /// The mono line under the title and in the menu.
     var statusLine: (text: String, color: Color) {
-        switch engine {
-        case .missing:
-            return ("carry is not installed on this Mac", Theme.warn)
-        case .outdated(let version):
-            return ("carry \(version) is older than this app · \(CarryCLI.upgradeCommand)", Theme.warn)
-        case .failed(let message):
-            return ("carry status failed · \(message)", Theme.warn)
-        case .ready:
-            break
-        }
         if isSyncing, let started = syncStartedAt {
             return ("Syncing… since \(TimeText.short(started))", Theme.ink)
         }
         if let last = lastSync, !last.ok {
-            let detail = last.tail.isEmpty ? "" : " · \(last.tail)"
-            return ("Sync failed \(TimeText.short(last.endedAt)) · exit \(last.exitCode)\(detail)", Theme.warn)
+            return ("Sync failed \(TimeText.short(last.endedAt)) · \(last.summary)", Theme.warn)
         }
         guard let status else { return ("Reading status…", Theme.ink2) }
         var parts: [String] = []
@@ -264,11 +227,21 @@ final class AppModel {
             for _ in 0 ..< 900 { // up to 30 minutes
                 try? await Task.sleep(for: .seconds(2))
                 guard let self, self.fdaWaiting else { return }
-                if await self.probeFDA() {
+                if FullDiskAccess.check() {
                     self.fdaWaiting = false
                     self.fdaGranted = true
+                    self.fdaNeedsRelaunch = false
                     AppLog.write("FDA granted")
                     await self.fdaBecameGranted()
+                    return
+                }
+                // macOS applies a new grant to processes started afterwards and keeps this process's own
+                // verdict until relaunch; a child of this app sees the new state.
+                let child = await Task.detached { FullDiskAccess.checkFromChild() }.value
+                if child {
+                    self.fdaWaiting = false
+                    self.fdaNeedsRelaunch = true
+                    AppLog.write("FDA granted; this process needs a relaunch to use it")
                     return
                 }
             }
@@ -280,15 +253,14 @@ final class AppModel {
         fdaWaiting = false
     }
 
-    /// macOS applies a new FDA grant to processes started afterwards, and may keep this process's own
-    /// verdict cached until relaunch. So ask the CLI too: a fresh child sees the new state.
-    private func probeFDA() async -> Bool {
-        if FullDiskAccess.check() { return true }
-        guard let cli = cliPath, !isSyncing else { return false }
-        let result = await CarryCLI.run(cli, ["status", "--json"], extraEnvironment: extraEnvironment, timeout: 20)
-        guard let parsed = decodeStatus(result) else { return false }
-        status = parsed
-        return parsed.fda == true
+    /// Start a fresh instance (which gets the new Full Disk Access verdict) and quit this one.
+    func relaunch() {
+        AppLog.write("relaunch requested")
+        let config = NSWorkspace.OpenConfiguration()
+        config.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: config) { _, _ in
+            DispatchQueue.main.async { NSApp.terminate(nil) }
+        }
     }
 
     private func fdaBecameGranted() async {
@@ -312,13 +284,12 @@ final class AppModel {
     var decidedOnPhone: Bool { status?.decidedBy == "phone" }
 
     func setSource(_ name: String, enabled: Bool) {
-        guard let cli = cliPath, !decidedOnPhone else { return }
+        guard !decidedOnPhone else { return }
         sourceOverrides[name] = enabled
         Task {
-            let result = await CarryCLI.run(cli, ["sources", name, enabled ? "--on" : "--off"],
-                                            extraEnvironment: extraEnvironment, timeout: 30)
-            AppLog.write("sources \(name) \(enabled ? "on" : "off"), exit \(result.exitCode)")
-            sourceNote = result.ok ? nil : result.tail
+            let note = await Engine.shared.setSource(name, enabled: enabled)
+            AppLog.write("sources \(name) \(enabled ? "on" : "off")" + (note.map { " (\($0))" } ?? ""))
+            sourceNote = note
             await refreshStatus()
         }
     }
@@ -334,9 +305,54 @@ final class AppModel {
 
     var heartbeatForDisplay: Heartbeat? {
         if previewMode {
-            return Heartbeat(host: HeartbeatFile.hostName, carryVersion: cliVersion, lastSyncAt: RFC3339.string())
+            return Heartbeat(host: HeartbeatFile.hostName, carryVersion: Self.appVersion, lastSyncAt: RFC3339.string())
         }
         return heartbeat
+    }
+
+    // MARK: - For agents
+
+    static let claudeAddCommand = "claude mcp add --transport http carry \(MCPServer.url)"
+    static let codexBlock = "[mcp_servers.carry]\nurl = \"\(MCPServer.url)\"\ndefault_tools_approval_mode = \"auto\"\n"
+    static let codexConfig = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex/config.toml")
+
+    /// `claude mcp add --transport http carry http://127.0.0.1:47850/mcp`, when the `claude` binary exists.
+    func addToClaudeCode() {
+        claudePath = Shell.locate("claude")
+        guard let claude = claudePath else { return }
+        claudeResult = "Running…"
+        Task {
+            let outcome = await Shell.runAsync(claude, ["mcp", "add", "--transport", "http", "carry", MCPServer.url], timeout: 60)
+            let line = outcome.tail.isEmpty ? (outcome.ok ? "Added." : "exit \(outcome.exitCode)") : outcome.tail
+            claudeResult = line
+            AppLog.write("claude mcp add → exit \(outcome.exitCode): \(line)")
+        }
+    }
+
+    var codexAlreadyThere: Bool {
+        (try? String(contentsOf: Self.codexConfig, encoding: .utf8))?.contains("[mcp_servers.carry]") == true
+    }
+
+    /// Back `~/.codex/config.toml` up to `config.toml.bak`, then append the block.
+    func appendToCodex() {
+        let path = Self.codexConfig
+        do {
+            let existing = try String(contentsOf: path, encoding: .utf8)
+            if existing.contains("[mcp_servers.carry]") {
+                codexResult = "config.toml already has [mcp_servers.carry]; edit it by hand if it points elsewhere."
+                return
+            }
+            let backup = path.deletingLastPathComponent().appendingPathComponent("config.toml.bak")
+            try? FileManager.default.removeItem(at: backup)
+            try FileManager.default.copyItem(at: path, to: backup)
+            let joined = existing.hasSuffix("\n") || existing.isEmpty ? existing : existing + "\n"
+            try (joined + "\n" + Self.codexBlock).write(to: path, atomically: true, encoding: .utf8)
+            codexResult = "Appended. Backup at ~/.codex/config.toml.bak."
+            AppLog.write("codex config: appended [mcp_servers.carry]")
+        } catch {
+            codexResult = "Could not write: \(error.localizedDescription)"
+            AppLog.write("codex config failed: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Footer actions

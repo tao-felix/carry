@@ -9,7 +9,7 @@ struct MenuContent: View {
         Text(model.statusLine.text)
         Divider()
         Button("Sync now") { Task { await model.sync(reason: "menu") } }
-            .disabled(model.isSyncing || model.cliPath == nil)
+            .disabled(model.isSyncing)
         Button("Open Carry") { MainWindowController.shared.show(model: model) }
         Button("Open context folder") { model.openContextFolder() }
         Divider()

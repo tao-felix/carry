@@ -124,6 +124,38 @@ struct CodeLine: View {
     }
 }
 
+/// A multi-line block the user may copy (a paragraph, a TOML snippet), mono, with a Copy button at the top right.
+struct CodeBlock: View {
+    let text: String
+    @State private var copied = false
+
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text(text)
+                .font(.mono)
+                .foregroundStyle(Theme.ink)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Button(copied ? "Copied" : "Copy") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+                copied = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+            }
+            .buttonStyle(QuietButtonStyle())
+        }
+        .padding(.leading, 10)
+        .padding(.trailing, 4)
+        .padding(.vertical, 6)
+        .background(Theme.paper)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Theme.line, lineWidth: 1))
+    }
+}
+
 /// A footnote with a colored dot: the honest limits (warn) or a reassurance (ok).
 struct Note: View {
     let text: String

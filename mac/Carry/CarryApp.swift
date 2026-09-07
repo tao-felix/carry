@@ -23,6 +23,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if DEBUG
         DebugArguments.applyAppearance()
         model.previewMode = DebugArguments.previewMode
+        model.noProcess = UserDefaults.standard.bool(forKey: "carryNoProcess")
+        model.syncAndQuit = UserDefaults.standard.bool(forKey: "carrySyncAndQuit")
         #endif
         model.start()
         if model.shouldOpenWindowAtLaunch { MainWindowController.shared.show(model: model) }
@@ -42,9 +44,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 #if DEBUG
-/// Launch arguments for screenshots (see project.yml): `-carryAppearance dark`, `-carryPreview 1`, `-carryScroll bottom`,
+/// Launch arguments (see project.yml): `-carryAppearance dark`, `-carryPreview 1`, `-carryScroll bottom`,
 /// `-carrySnapshot /path.png` (written `-carrySnapshotDelay` seconds after launch, default 3; needs no
-/// screen-recording permission).
+/// screen-recording permission); `-carryNoProcess 1` skips OCR / transcription, `-carrySyncAndQuit 1` syncs once
+/// and exits (scripted parity runs, with `CARRY_HOME` pointing at a scratch home).
 @MainActor
 enum DebugArguments {
     static var previewMode: Bool { UserDefaults.standard.bool(forKey: "carryPreview") }
