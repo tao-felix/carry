@@ -149,7 +149,7 @@ The single paid plan is **Carry Pro** (product id `app.carry.pro`, auto-renewing
 
 - The iOS app writes the latest verified `Transaction` JWS (`transaction.jwsRepresentation`) whenever entitlement changes and at least once a day while active.
 - The Mac verifies the JWS offline: `x5c` chain up to Apple Root CA G3, ES256 signature, `productId == app.carry.pro`, `expiresDate` in the future (with a 3-day grace).
-- What Pro unlocks, and only this: **post-processing of media on the Mac**. Screenshot and photo OCR (Vision), voice memo and inbox audio transcription (Whisper), image captions where available. Everything else is free and open source.
+- What Pro unlocks, and only this: **post-processing of media on the Mac**. Screenshot and photo OCR (Vision), voice memo and inbox audio transcription (Whisper). Everything else is free and open source.
 - Developer override for testing on the Mac: `CARRY_PRO=1`.
 
 ## 8. Heartbeat: `heartbeat/<mac-host>.json` (Mac → phone)

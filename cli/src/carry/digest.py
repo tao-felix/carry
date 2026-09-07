@@ -112,8 +112,11 @@ def build_day(store, day: str, enabled: dict[str, bool], pro: bool, decided_by: 
             lines.append(head)
             if m.get("note"):
                 lines.append(f"  - note: {m['note']}")
-            if r["text"] and r["text"] != m.get("note"):
-                lines.append(f"  - {excerpt(r['text'], 400)}")
+            body = (r["text"] or "").strip()
+            if m.get("note") and body.startswith(m["note"]):
+                body = body[len(m["note"]):].strip()
+            if body:
+                lines.append(f"  - {excerpt(body, 400)}")
         section(f"Inbox ({len(lines and store.day_items(day, 'inbox'))})", lines)
 
     if enabled.get("health"):

@@ -117,8 +117,7 @@ def collect_inbox(store, cfg, backfill_start: datetime) -> int:
             continue
         ts = parse_iso(r.get("ts", "")) or now()
         kind = r.get("kind", "text")
-        parts = [r.get("text") or "", r.get("note") or ""]
-        text = "\n".join(p for p in parts if p).strip() or None
+        text = (r.get("text") or "").strip() or None  # the note stays in meta; the digest prints it on its own line
         attachment = d / r["file"] if r.get("file") else None
         meta = {"url": r.get("url"), "from_app": r.get("from_app"), "note": r.get("note"), "file": r.get("file")}
         title = (r.get("title") or "").strip() or r.get("url") or ((r.get("text") or "")[:60].strip()) or kind.capitalize()

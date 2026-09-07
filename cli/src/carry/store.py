@@ -73,8 +73,11 @@ class Store:
                 (id, source, kind, t, iso(ts_end), day_of(ts), title, text, json.dumps(meta or {}, ensure_ascii=False), path, device, stamp, stamp),
             )
             return True
-        # Keep processed text (OCR / transcript) unless the caller brings new text.
-        new_text = text if (text or not keep_processed) else row["text"]
+        # Never let a re-read overwrite text that processing (OCR / transcript) produced.
+        if keep_processed and row["processed"]:
+            new_text = row["text"]
+        else:
+            new_text = text if (text or not keep_processed) else row["text"]
         self.con.execute(
             "update items set source=?,kind=?,ts=?,ts_end=?,day=?,title=?,text=?,meta=?,path=?,device=?,updated_at=? where id=?",
             (source, kind, t, iso(ts_end), day_of(ts), title, new_text, json.dumps(meta or {}, ensure_ascii=False), path, device, stamp, id),

@@ -26,7 +26,7 @@ const rows = [
 
 export function Privacy() {
   return (
-    <Section number="04" title="What is read, where it goes, who sees it">
+    <Section id="privacy" number="04" title="What is read, where it goes, who sees it">
       <dl className="prose-code overflow-hidden rounded-card border border-line">
         {rows.map((r, i) => (
           <div

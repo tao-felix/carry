@@ -4,7 +4,6 @@ import { Section } from "./Section";
 const pro = [
   "Screenshot and photo OCR",
   "Voice memo and audio transcription",
-  "Image captions",
 ];
 
 const free = [

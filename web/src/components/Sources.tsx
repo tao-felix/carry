@@ -10,18 +10,18 @@ const sources: {
   channel: Channel;
   offByDefault?: boolean;
 }[] = [
-  { key: "photos", name: "Photos", reads: "When and where recent photos were taken; a caption with Pro.", channel: "icloud" },
-  { key: "screenshots", name: "Screenshots", reads: "When each screenshot was taken; the text on it with Pro.", channel: "icloud" },
-  { key: "voice_memos", name: "Voice Memos", reads: "Title, length and time of each memo; a transcript with Pro.", channel: "icloud" },
-  { key: "notes", name: "Notes", reads: "Title and body of notes you created or edited today.", channel: "icloud" },
-  { key: "messages", name: "Messages", reads: "iMessage and SMS threads that changed today, with senders.", channel: "icloud", offByDefault: true },
-  { key: "calendar", name: "Calendar", reads: "Today's and tomorrow's events: time, title, location, attendees.", channel: "icloud" },
-  { key: "reminders", name: "Reminders", reads: "Open and just-completed reminders, with due dates and lists.", channel: "icloud" },
-  { key: "safari", name: "Safari", reads: "Pages you visited today and your Reading List.", channel: "icloud", offByDefault: true },
-  { key: "screen_time", name: "Screen Time", reads: "Minutes per app and pickups, per day.", channel: "icloud" },
-  { key: "health", name: "Health", reads: "Sleep, steps, heart rate, resting HR, HRV, energy, workouts, weight, blood oxygen.", channel: "app" },
-  { key: "location", name: "Location", reads: "Places you visited, when you arrived and left.", channel: "app" },
-  { key: "inbox", name: "Share inbox", reads: "What you send from the share sheet: links, text, images, files, plus your note.", channel: "app" },
+  { key: "photos", name: "Photos", reads: "New photos: time, place, caption. Text inside them with Pro.", channel: "icloud" },
+  { key: "screenshots", name: "Screenshots", reads: "New screenshots. The text inside them with Pro.", channel: "icloud" },
+  { key: "voice_memos", name: "Voice Memos", reads: "New recordings: title, length. Transcript with Pro.", channel: "icloud" },
+  { key: "notes", name: "Notes", reads: "Notes edited today: title and text.", channel: "icloud" },
+  { key: "messages", name: "Messages", reads: "iMessage and SMS threads active today.", channel: "icloud", offByDefault: true },
+  { key: "calendar", name: "Calendar", reads: "Today's and upcoming events.", channel: "icloud" },
+  { key: "reminders", name: "Reminders", reads: "Due, overdue and completed today.", channel: "icloud" },
+  { key: "safari", name: "Safari", reads: "Pages visited today.", channel: "icloud", offByDefault: true },
+  { key: "screen_time", name: "Screen Time", reads: "Apps used today and for how long.", channel: "icloud" },
+  { key: "health", name: "Health", reads: "Sleep, steps, heart rate, HRV, workouts, weight, blood oxygen.", channel: "app" },
+  { key: "location", name: "Location", reads: "Places visited: arrive, leave, where.", channel: "app" },
+  { key: "inbox", name: "Share inbox", reads: "Anything you shared to Carry from any app.", channel: "app" },
 ];
 
 function Badge({ channel }: { channel: Channel }) {
