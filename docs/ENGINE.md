@@ -23,6 +23,12 @@ The FDA card: on tap, attempt to open `~/Library/Messages/chat.db` (so macOS lis
 `x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles`, poll every 2 s, then sync. Copy:
 "One switch, once. macOS doesn't let any app flip it for you."
 
+Permission rule (borrowed from 老己's DESKTOP.md): ask **at the moment it is needed**, say plainly what it is
+("a switch in System Settings; nothing to install, nothing to type"), give one button that lands on that switch,
+and never add an onboarding step for it. Signing and distribution follow 老己 too: Developer ID + hardened
+runtime + notarize the app, then the DMG, staple both, and verify from the recipient's point of view
+(`mac/scripts/release.sh`, `mac/scripts/verify-dmg.sh`).
+
 ## 2. Store
 
 `~/.carry/carry.db`, SQLite (system `libsqlite3`, FTS5 is compiled in), WAL. Schema is exactly `cli/src/carry/store.py`:
