@@ -1,0 +1,58 @@
+# Carry for Mac. Generate the Xcode project with `xcodegen generate`.
+name: CarryMac
+options:
+  bundleIdPrefix: app.carry
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "26.2"
+  createIntermediateGroups: true
+  groupSortPosition: top
+  generateEmptyDirectories: false
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: minimal
+    DEVELOPMENT_TEAM: PZHSCK4VXU
+    CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    GENERATE_INFOPLIST_FILE: NO
+    # Off until the owner signs with Developer ID; see README.md.
+    ENABLE_HARDENED_RUNTIME: NO
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_EMIT_LOC_STRINGS: NO
+    COMBINE_HIDPI_IMAGES: YES
+  configs:
+    Debug:
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+      SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+    Release:
+      SWIFT_COMPILATION_MODE: wholemodule
+
+targets:
+  Carry:
+    type: application
+    platform: macOS
+    sources:
+      - path: Carry
+    settings:
+      base:
+        PRODUCT_NAME: Carry
+        PRODUCT_BUNDLE_IDENTIFIER: app.carry.mac
+        INFOPLIST_FILE: Carry/Info.plist
+
+schemes:
+  Carry:
+    build:
+      targets:
+        Carry: all
+    run:
+      config: Debug
+      # DEBUG-only launch arguments, for screenshots. Enable one to use it.
+      commandLineArguments:
+        "-carryAppearance dark": false
+        "-carryPreview 1": false
+        "-carrySnapshot /tmp/carry-main.png": false
+    archive:
+      config: Release

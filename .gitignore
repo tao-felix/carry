@@ -12,3 +12,4 @@ DerivedData/
 *.xcworkspace/xcuserdata/
 .env*
 !.env.example
+build-release/

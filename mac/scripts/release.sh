@@ -15,15 +15,15 @@ notarize=${CARRY_NOTARIZE:-true}
 security find-identity -v -p codesigning | grep -qF "$CARRY_SIGN_IDENTITY" || { echo "✗ identity not in keychain: $CARRY_SIGN_IDENTITY" >&2; exit 1; }
 notary_args=(--keychain-profile "${CARRY_NOTARY_PROFILE:-carry-notary}")
 [ -n "${APPLE_API_KEY:-}" ] && notary_args=(--key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER")
-version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Carry/Info.plist 2>/dev/null || echo 0.1.0)
-out=dist; rm -rf "$out" build/Release; mkdir -p "$out"
+version=$(grep -E '^\s*MARKETING_VERSION:' project.yml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+out=dist; dd=build-release; rm -rf "$out" "$dd"; mkdir -p "$out"
 echo "· identity: $CARRY_SIGN_IDENTITY"; echo "· version: $version"; echo "· notarize: $notarize"
 
 xcodegen generate >/dev/null
-xcodebuild -project CarryMac.xcodeproj -scheme Carry -configuration Release -derivedDataPath build \
+xcodebuild -project CarryMac.xcodeproj -scheme Carry -configuration Release -derivedDataPath "$dd" \
   CODE_SIGN_IDENTITY="$CARRY_SIGN_IDENTITY" CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$(echo "$CARRY_SIGN_IDENTITY" | sed -E 's/.*\(([A-Z0-9]+)\)$/\1/')" \
   ENABLE_HARDENED_RUNTIME=YES OTHER_CODE_SIGN_FLAGS="--timestamp --options runtime" build | grep -E "BUILD (SUCCEEDED|FAILED)|error:"
-app="build/Build/Products/Release/Carry.app"
+app="$dd/Build/Products/Release/Carry.app"
 codesign --verify --deep --strict --verbose=2 "$app"
 
 if [ "$notarize" != false ]; then
