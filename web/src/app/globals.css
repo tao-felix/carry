@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+/* ---- Carry tokens (docs/DESIGN.md) ---- */
+:root {
+  color-scheme: light dark;
+  --paper: #f6f1e9;
+  --paper2: #ede6da;
+  --line: #d9d0c1;
+  --ink: #141310;
+  --ink2: #5c574d;
+  --moss: #2e5e4e;
+  --tangerine: #e8562b;
+  --warn: #b8860b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #141310;
+    --paper2: #1f1d18;
+    --line: #2e2b24;
+    --ink: #f6f1e9;
+    --ink2: #a39d90;
+    --moss: #7fb39e;
+    --tangerine: #ff7a4d;
+    --warn: #e0b54a;
+  }
+}
+
+@theme inline {
+  --color-*: initial;
+  --color-paper: var(--paper);
+  --color-paper2: var(--paper2);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-ink2: var(--ink2);
+  --color-moss: var(--moss);
+  --color-tangerine: var(--tangerine);
+  --color-ok: var(--moss);
+  --color-warn: var(--warn);
+
+  /* Loaded via <link> in app/layout.tsx; each face has a real local fallback. */
+  --font-serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-sans: Inter, -apple-system, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Type scale: display 56/64, h2 32/40, h3 22/28, body 17/26, small 14/20, mono 14/22 */
+  --text-display: 56px;
+  --text-display--line-height: 64px;
+  --text-display--letter-spacing: -0.01em;
+  --text-display-sm: 40px;
+  --text-display-sm--line-height: 46px;
+  --text-display-sm--letter-spacing: -0.01em;
+  --text-h2: 32px;
+  --text-h2--line-height: 40px;
+  --text-h2--letter-spacing: -0.005em;
+  --text-h3: 22px;
+  --text-h3--line-height: 28px;
+  --text-body: 17px;
+  --text-body--line-height: 26px;
+  --text-small: 14px;
+  --text-small--line-height: 20px;
+  --text-mono: 14px;
+  --text-mono--line-height: 22px;
+  --text-mono-sm: 13px;
+  --text-mono-sm--line-height: 20px;
+
+  --radius-card: 12px;
+}
+
+html {
+  background: var(--paper);
+  scroll-behavior: smooth;
+  scroll-padding-top: 72px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 17px;
+  line-height: 26px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Headlines: no widows on narrow screens */
+h1,
+h2 {
+  text-wrap: balance;
+}
+
+::selection {
+  background: var(--tangerine);
+  color: var(--paper);
+}
+
+/* Hairline focus ring, no glow */
+:focus-visible {
+  outline: 1.5px solid var(--tangerine);
+  outline-offset: 3px;
+}
+
+/* Inline code in prose: mono, no box */
+.prose-code code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  color: var(--ink);
+}
