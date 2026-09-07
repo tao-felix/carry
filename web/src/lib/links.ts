@@ -10,6 +10,8 @@ export const links = {
   github: "https://github.com/tao-felix/carry",
 
   /** iPhone app. Placeholders until the app is live. */
+  macDownload: "https://github.com/tao-felix/carry/releases/latest/download/Carry-0.1.0-arm64.dmg",
+  macReleases: "https://github.com/tao-felix/carry/releases/latest",
   appStore: "#ios",
   testflight: "#ios",
 
@@ -23,9 +25,11 @@ export const links = {
 
   /** Paths and commands quoted on the page. */
   contextDir: "~/.carry/context/",
-  mcpAddClaude: "claude mcp add carry -- carry mcp",
+  mcpUrl: "http://127.0.0.1:47850/mcp",
+  mcpAddClaude: "claude mcp add --transport http carry http://127.0.0.1:47850/mcp",
+  mcpAddClaudeCli: "claude mcp add carry -- carry mcp",
   mcpCodexPath: "~/.codex/config.toml",
-  mcpCodexToml: '[mcp_servers.carry]\ncommand = "carry"\nargs = ["mcp"]\ndefault_tools_approval_mode = "auto"',
+  mcpCodexToml: '[mcp_servers.carry]\nurl = "http://127.0.0.1:47850/mcp"\ndefault_tools_approval_mode = "auto"',
   agentsMd:
     'My phone context lives in ~/.carry/context/. Read latest.md at the start of a session when my request touches my day, my health, places, or things I shared from my phone. Use `carry search "<query>"` for anything older.',
 } as const;

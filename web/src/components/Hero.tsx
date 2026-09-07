@@ -34,27 +34,24 @@ export function Hero() {
           Mac reads it.
         </p>
 
-        {/* Two CTAs side by side: Mac CLI install block + iPhone button */}
-        <div className="mt-10 grid gap-4 sm:mt-12 md:grid-cols-[minmax(0,1fr)_auto] md:items-stretch">
-          <div className="flex flex-col rounded-card border border-line bg-paper2">
-            <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-              <span className="font-mono text-mono-sm text-ink2">
-                Mac · Terminal
-              </span>
-              <CopyButton text={install} />
-            </div>
-            <pre className="overflow-x-auto px-4 py-4 font-mono text-mono text-ink sm:text-[15px] sm:leading-[24px]">
-              <code>
-                <span className="select-none text-ink2">$ </span>
-                {links.cliInstall}
-                {"\n"}
-                <span className="select-none text-ink2">$ </span>
-                {links.cliInit}
-              </code>
-            </pre>
+        {/* Two apps, two buttons. The CLI is the developer path and stays one quiet line. */}
+        <div className="mt-10 grid gap-3 sm:mt-12 sm:grid-cols-2 md:max-w-[640px]">
+          <div className="flex flex-col gap-2">
+            <a
+              href={links.macDownload}
+              className="inline-flex h-[52px] items-center justify-center gap-2 rounded-card bg-ink px-6 text-[16px] font-medium text-paper transition-opacity duration-150 hover:opacity-90"
+            >
+              <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" className="stroke-current" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="1.5" y="3" width="13" height="8.5" rx="1.5" />
+                <path d="M5 14h6" />
+              </svg>
+              Download Carry for Mac
+            </a>
+            <p className="text-center font-mono text-mono-sm text-ink2">
+              macOS 14+ · notarized · one switch, once
+            </p>
           </div>
-
-          <div className="flex flex-col justify-center gap-2 md:w-[260px]">
+          <div className="flex flex-col gap-2">
             <a
               href={links.appStore}
               className="inline-flex h-[52px] items-center justify-center gap-2 rounded-card bg-tangerine px-6 text-[16px] font-medium text-paper transition-opacity duration-150 hover:opacity-90"
@@ -70,6 +67,12 @@ export function Hero() {
             </p>
           </div>
         </div>
+
+        <p className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-mono-sm text-ink2">
+          <span>Developers, headless Macs:</span>
+          <code className="text-ink">{links.cliInstall}</code>
+          <CopyButton text={install} />
+        </p>
 
         <p className="mt-8 font-mono text-mono text-ink2">
           <span className="text-ink">No Carry server.</span>{" "}

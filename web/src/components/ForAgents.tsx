@@ -7,13 +7,13 @@ const snippets: { title: string; where: string; code: string; note?: string }[] 
     title: "Claude Code",
     where: "Terminal",
     code: links.mcpAddClaude,
-    note: "Registers the stdio MCP server. Tools: today, search, recent, status.",
+    note: `Carry for Mac serves MCP on localhost while it runs. Tools: digest, search, recent, item, sources. CLI instead: ${links.mcpAddClaudeCli}`,
   },
   {
     title: "Codex",
     where: links.mcpCodexPath,
     code: links.mcpCodexToml,
-    note: "Cursor and any other MCP client: same command, carry mcp, over stdio.",
+    note: "Cursor and any other MCP client: the same URL. Codex asks once per tool unless approval mode is auto.",
   },
   {
     title: "CLAUDE.md / AGENTS.md",

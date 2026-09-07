@@ -5,11 +5,12 @@ import { ChannelsDiagramTall, ChannelsDiagramWide } from "./ChannelsDiagram";
 const steps = [
   {
     n: "1",
-    title: "Install the CLI on your Mac.",
+    title: "Install Carry for Mac.",
     body: (
       <>
-        <code>{links.cliInstall}</code>, then <code>{links.cliInit}</code>. It finds what iCloud already put on
-        the Mac, checks Full Disk Access, and installs a 15-minute sync.
+        Open the DMG, drag Carry to Applications. It reads what iCloud already put on the Mac and syncs every 15
+        minutes. One switch in System Settings (Full Disk Access) unlocks the protected sources; Carry takes you
+        there. Developers: <code>{links.cliInstall}</code> does the same from a terminal.
       </>
     ),
   },
