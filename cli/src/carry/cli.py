@@ -103,6 +103,9 @@ def init(yes: bool = typer.Option(False, "--yes", "-y", help="Install the backgr
     save_config(cfg)
     con.print(Text(f"→ {CONFIG_PATH}", style=DIM))
 
+    if _app_running():
+        con.print(Text("Carry for Mac is running and will schedule the sync itself, so no LaunchAgent is installed.", style=DIM))
+        no_agent = True
     if not no_agent and (yes or typer.confirm("Install the background sync (every 15 minutes while awake)?", default=True)):
         p = launchd.install(cfg["carry"]["schedule_minutes"])
         con.print(Text(f"→ {p}  (every {cfg['carry']['schedule_minutes']} min)", style=DIM))
@@ -243,11 +246,63 @@ def recent(source: str = typer.Argument(..., help="photos, screenshots, voice_me
     store.close()
 
 
+def _status_payload(cfg, store) -> dict:
+    enabled, decided_by = effective_sources(cfg)
+    counts, state = store.counts(), store.sync_state()
+    p = pro_mod.status()
+    m = container.manifest() or {}
+    device = m.get("device", {}) if m else {}
+    rows = []
+    for name, s in SOURCES.items():
+        st = state.get("photos" if name == "screenshots" else name)
+        rows.append({"name": name, "label": s.label, "channel": s.channel, "enabled": enabled[name],
+                     "items": counts.get(name, 0), "last_run": st["last_run"] if st else None,
+                     "error": (st["last_error"] or None) if st else None})
+    last_sync = max((r["last_run"] for r in rows if r["last_run"]), default=None)
+    blocked = [r["label"] for r in rows if r["error"] and "Full Disk Access" in r["error"]]
+    return {
+        "version": __version__, "home": str(CARRY_HOME), "context_dir": str(CONTEXT_DIR), "decided_by": decided_by,
+        "pro": {"active": p.active, "reason": p.reason, "expires_at": p.expires_at},
+        "fda": _fda_ok(), "agent_installed": launchd.installed(), "app_running": _app_running() is not None,
+        "last_sync_at": last_sync, "sources": rows,
+        "phone": ({"name": device.get("name"), "os": device.get("os"), "app_version": m.get("app_version"),
+                   "updated_at": m.get("updated_at")} if m else None),
+        "pending": processing.pending_counts(store), "blocked": blocked,
+    }
+
+
+def _app_running() -> dict | None:
+    """The Mac app writes ~/.carry/app.json while it runs; stale after 3 minutes."""
+    p = CARRY_HOME / "app.json"
+    try:
+        info = json.loads(p.read_text())
+        seen = datetime.fromisoformat(info["last_seen"])
+        if (now() - seen).total_seconds() < 180 and _pid_alive(int(info.get("pid", 0))):
+            return info
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
 @app.command()
-def status():
+def status(as_json: bool = typer.Option(False, "--json", help="Machine-readable, for the Mac app.")):
     """Where things stand: sources, counts, last sync, Pro, iPhone heartbeat."""
     cfg = load_config()
     store = Store()
+    if as_json:
+        sys.stdout.write(json.dumps(_status_payload(cfg, store), ensure_ascii=False, indent=1) + "\n")
+        store.close()
+        return
     enabled, decided_by = effective_sources(cfg)
     counts, state = store.counts(), store.sync_state()
     t = Table(box=None, pad_edge=False, header_style="bold")
@@ -276,14 +331,21 @@ def status():
         con.print(Text(f"last run could not read: {', '.join(blocked)}", style="yellow"))
         for line in _fda_hint(for_agent=launchd.installed()):
             con.print(line)
-    con.print(Text(f"agent: {'installed' if launchd.installed() else 'not installed'} · db {DB_PATH} · context {CONTEXT_DIR}", style=DIM))
+    scheduler = "Carry for Mac (running)" if _app_running() else ("LaunchAgent installed" if launchd.installed() else "no background sync")
+    con.print(Text(f"scheduler: {scheduler} · db {DB_PATH} · context {CONTEXT_DIR}", style=DIM))
     store.close()
 
 
 @app.command()
-def sources(name: str = typer.Argument(None), enable: bool = typer.Option(None, "--on/--off")):
+def sources(name: str = typer.Argument(None), enable: bool = typer.Option(None, "--on/--off"),
+            as_json: bool = typer.Option(False, "--json", help="Machine-readable, for the Mac app.")):
     """List sources, or switch one on/off on this Mac (the iPhone app's choice wins when present)."""
     cfg = load_config()
+    if as_json and not name:
+        store = Store()
+        sys.stdout.write(json.dumps(_status_payload(cfg, store)["sources"], ensure_ascii=False, indent=1) + "\n")
+        store.close()
+        return
     if name:
         if name not in SOURCES or enable is None:
             con.print(Text("usage: carry sources <name> --on|--off", style="red"))
