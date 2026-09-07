@@ -23,22 +23,40 @@ def ocr_image(path: str) -> str | None:
 
 
 def transcribe_audio(path: str, model: str) -> tuple[str | None, str | None]:
-    """Returns (text, error). Tries the cached model offline first so a missing proxy cannot break a
-    background run; only reaches the network when the model is not on disk yet."""
+    """Returns (text, error). Copies the audio to a scratch file first: under launchd, ffmpeg (a child
+    process) is denied Apple's protected containers even when this process may read them. Tries the
+    cached model offline first so a missing proxy cannot break a background run."""
+    import shutil
+    import tempfile
+
     os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
     os.environ.setdefault("TQDM_DISABLE", "1")
     import mlx_whisper
 
-    last_error = None
-    for offline in ("1", "0"):
-        os.environ["HF_HUB_OFFLINE"] = offline
+    from carry.config import CARRY_HOME
+
+    scratch_dir = CARRY_HOME / "tmp"
+    scratch_dir.mkdir(parents=True, exist_ok=True)
+    fd, scratch = tempfile.mkstemp(prefix="memo-", suffix=Path(path).suffix or ".m4a", dir=scratch_dir)
+    os.close(fd)
+    try:
         try:
-            out = mlx_whisper.transcribe(path, path_or_hf_repo=model, verbose=None)
-            text = (out.get("text") or "").strip()
-            return (text or None), None
-        except Exception as e:  # noqa: BLE001
-            last_error = f"{type(e).__name__}: {str(e)[:160]}"
-    return None, last_error
+            shutil.copyfile(path, scratch)
+        except OSError as e:
+            return None, f"cannot read audio: {e}"
+        last_error = None
+        for offline in ("1", "0"):
+            os.environ["HF_HUB_OFFLINE"] = offline
+            try:
+                out = mlx_whisper.transcribe(scratch, path_or_hf_repo=model, verbose=None)
+                text = (out.get("text") or "").strip()
+                return (text or None), None
+            except Exception as e:  # noqa: BLE001
+                msg = " ".join(str(e).split())
+                last_error = f"{type(e).__name__}: {msg[-300:]}"
+        return None, last_error
+    finally:
+        Path(scratch).unlink(missing_ok=True)
 
 
 def audio_seconds(path: str) -> float | None:

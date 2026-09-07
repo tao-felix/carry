@@ -264,6 +264,10 @@ def build_day(store, day: str, enabled: dict[str, bool], pro: bool, decided_by: 
             lines.append(f"- {device}: {top}")
         section("Screen time", lines)
 
+    blocked = [SOURCES[n].label for n, st in store.sync_state().items()
+               if n in SOURCES and enabled.get(n) and "Full Disk Access" in (st["last_error"] or "")]
+    if blocked:
+        out.append(f"_Not read in the last sync (needs Full Disk Access, see `carry status`): {', '.join(blocked)}_")
     if empty:
         out.append(f"_Nothing today: {', '.join(empty)}_")
     off = [SOURCES[k].label for k, v in enabled.items() if not v and k != "messages"]

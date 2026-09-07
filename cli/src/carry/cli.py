@@ -41,6 +41,20 @@ def _fda_ok() -> bool:
     return ok
 
 
+def _agent_binary() -> str:
+    return os.path.realpath(sys.executable)
+
+
+def _fda_hint(for_agent: bool) -> list[Text]:
+    who = "the background sync" if for_agent else "this terminal"
+    return [
+        Text(f"Full Disk Access is off for {who}.", style="bold yellow"),
+        Text("  System Settings → Privacy & Security → Full Disk Access → + → add:", style=DIM),
+        Text(f"    {_agent_binary()}", style=DIM) if for_agent else Text("    your terminal app (Terminal, iTerm, Claude, Cursor…)", style=DIM),
+        Text("  Without it, Notes, Voice Memos, Messages, Calendar, Reminders, Safari and Screen Time cannot be read there.", style=DIM),
+    ]
+
+
 def _agent_snippet() -> str:
     return (
         "My phone context lives in ~/.carry/context/ (written by Carry). Read latest.md at the start of a session when my "
@@ -67,9 +81,9 @@ def init(yes: bool = typer.Option(False, "--yes", "-y", help="Install the backgr
 
     fda = _fda_ok()
     if not fda:
-        con.print(Text("Full Disk Access is off for this terminal.", style="bold yellow"))
-        con.print(Text("  System Settings → Privacy & Security → Full Disk Access → add your terminal app, then run `carry init` again.", style=DIM))
-        con.print(Text("  Without it Carry can still read Photos, Voice Memos, Notes, Calendar and Reminders.\n", style=DIM))
+        for line in _fda_hint(for_agent=False):
+            con.print(line)
+        con.print()
 
     enabled, decided_by = effective_sources(cfg)
     t = Table(show_header=True, header_style="bold", box=None, pad_edge=False)
@@ -92,6 +106,11 @@ def init(yes: bool = typer.Option(False, "--yes", "-y", help="Install the backgr
     if not no_agent and (yes or typer.confirm("Install the background sync (every 15 minutes while awake)?", default=True)):
         p = launchd.install(cfg["carry"]["schedule_minutes"])
         con.print(Text(f"→ {p}  (every {cfg['carry']['schedule_minutes']} min)", style=DIM))
+        con.print(Text("\nOne more grant, once: the background sync runs as its own program, so macOS asks again.", style="bold"))
+        for line in _fda_hint(for_agent=True)[1:3]:
+            con.print(line)
+        con.print(Text("  Then: carry agent restart   (or wait for the next 15-minute run)", style=DIM))
+        subprocess.run(["open", "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"], capture_output=True)
 
     con.print("\n[bold]Run the first sync[/bold]  `carry sync`  then  `carry today`")
     con.print("\n[bold]Point your agent at it[/bold]")
@@ -135,6 +154,7 @@ def sync(quiet: bool = typer.Option(False, "--quiet", "-q"),
                     n = READERS[name].collect(store, cfg, backfill) if ok else 0
                     totals[name] = n
                 if not ok:
+                    store.set_cursor(name, None, 0, error=note)
                     log(Text(f"  skip {name}: {note}", style="yellow"))
             else:
                 totals[name] = APP_READERS[name](store, cfg, backfill) if container.present() else 0
@@ -251,6 +271,11 @@ def status():
     pend = processing.pending_counts(store)
     if sum(pend.values()):
         con.print(Text("waiting for text: " + ", ".join(f"{k} {v}" for k, v in pend.items() if v), style=DIM))
+    blocked = [SOURCES[n].label for n, st in state.items() if n in SOURCES and st["last_error"] and "Full Disk Access" in (st["last_error"] or "")]
+    if blocked:
+        con.print(Text(f"last run could not read: {', '.join(blocked)}", style="yellow"))
+        for line in _fda_hint(for_agent=launchd.installed()):
+            con.print(line)
     con.print(Text(f"agent: {'installed' if launchd.installed() else 'not installed'} · db {DB_PATH} · context {CONTEXT_DIR}", style=DIM))
     store.close()
 
@@ -294,13 +319,16 @@ def mcp():
 
 
 @app.command()
-def agent(action: str = typer.Argument(..., help="install | uninstall | status")):
+def agent(action: str = typer.Argument(..., help="install | uninstall | restart | status")):
     """Manage the background sync LaunchAgent."""
     cfg = load_config()
     if action == "install":
         con.print(Text(f"→ {launchd.install(cfg['carry']['schedule_minutes'])}", style=DIM))
     elif action == "uninstall":
         con.print("removed" if launchd.uninstall() else "not installed")
+    elif action == "restart":
+        launchd.kickstart()
+        con.print("kicked")
     else:
         con.print("installed" if launchd.installed() else "not installed")
 

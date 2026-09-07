@@ -52,6 +52,10 @@ def uninstall() -> bool:
     return True
 
 
+def kickstart() -> None:
+    subprocess.run(["launchctl", "kickstart", "-k", f"gui/{_uid()}/{LABEL}"], capture_output=True)
+
+
 def installed() -> bool:
     return PLIST.exists()
 

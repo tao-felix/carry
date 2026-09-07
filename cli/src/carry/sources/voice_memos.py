@@ -20,7 +20,7 @@ def available() -> tuple[bool, str]:
         con.close()
         return True, f"{n:,} recordings"
     except Exception as e:  # noqa: BLE001
-        return False, f"Cannot read ({e})"
+        return False, f"Cannot read ({e}). Grant Full Disk Access."
 
 
 def collect(store, cfg, backfill_start: datetime) -> int:
