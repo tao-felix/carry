@@ -1,4 +1,8 @@
 #!/bin/bash
+# Usage: boot a simulator, build + install the Carry app, run
+#   xcrun simctl launch booted app.carry.ios -carryE2E 1
+# then run this script. It points the Mac CLI at the app's sandbox container, syncs, prints the digest,
+# and shows the heartbeat the CLI wrote back for the app. Set CARRY_E2E_HOME to keep the test store elsewhere.
 # End-to-end: iOS app (simulator, DEBUG sandbox container) → Mac CLI → digest → heartbeat back to the app.
 set -u
 BUNDLE=app.carry.ios
