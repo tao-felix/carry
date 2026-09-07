@@ -1,0 +1,14 @@
+.DS_Store
+node_modules/
+.next/
+.vercel/
+__pycache__/
+*.pyc
+.venv/
+dist/
+build/
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+.env*
+!.env.example
