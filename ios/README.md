@@ -74,6 +74,7 @@ Debug builds accept these (release builds ignore them). Each one is also listed,
 | `-carryDemo 1` | demo data without picking a screen |
 | `-carryICloudOff 1` | preview the "iCloud Drive is off for Carry" state |
 | `-carryScroll bottom` | scroll the screen to its end after 0.8 s (lower-half screenshots) |
+| `-carryE2E 1` | drive the REAL writers (sources.json with Messages on, two inbox items through InboxWriter, manifest, Sync now) so `scripts/e2e-sim.sh` can test the Mac CLI against this container. Verified 2026-09-08: CLI read it, OCR'd the inbox image, wrote the heartbeat, and Home showed "Mac read just now". |
 
 ```bash
 xcrun simctl launch booted app.carry.ios -carryScreen home
