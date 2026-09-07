@@ -51,7 +51,7 @@ struct ProView: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Auto-renews monthly until cancelled in Settings › Apple Account › Subscriptions.")
+                Text("Auto-renews until cancelled in Settings › Apple Account › Subscriptions.")
                     .font(.caption)
                     .foregroundStyle(Theme.ink2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -71,6 +71,11 @@ struct ProView: View {
             Button(pro.priceLine.map { "Subscribe · \($0)" } ?? "Subscribe") { Task { await pro.purchase() } }
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(pro.busy || (pro.product == nil && !pro.isDemo))
+            if let monthly = pro.monthlyLine {
+                Button("or \(monthly)") { Task { await pro.purchase(monthly: true) } }
+                    .buttonStyle(QuietButtonStyle())
+                    .disabled(pro.busy)
+            }
             Button("Restore purchases") { Task { await pro.restore() } }
                 .buttonStyle(QuietButtonStyle())
                 .disabled(pro.busy)

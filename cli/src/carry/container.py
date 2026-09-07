@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 import socket
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from carry import __version__
@@ -150,3 +150,116 @@ def write_heartbeat(store, pro: bool, sources_applied_at: str | None, last_diges
     tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
     tmp.replace(p)
     return p
+
+
+# --- Health Auto Export fallback --------------------------------------------------------------------
+# Some people already run Health Auto Export (HealthyApps) with an iCloud Drive automation. Its JSON lands in
+# iCloud Drive › AutoExport › <automation>/ . Reading it is a fallback for when the Carry app's own HealthKit
+# channel is not available (unsigned build, App Review outcome, or the user simply prefers HAE).
+
+HAE_DIRS = [
+    Path.home() / "Library/Mobile Documents/com~apple~CloudDocs/AutoExport",
+]
+HAE_NAMES = {
+    "step_count": ("steps", "count"), "heart_rate": ("heart_rate", "bpm"), "resting_heart_rate": ("resting_heart_rate", "bpm"),
+    "heart_rate_variability": ("hrv", "ms"), "active_energy": ("active_energy", "kcal"), "weight_body_mass": ("body_mass", None),
+    "blood_oxygen_saturation": ("blood_oxygen", "ratio"),
+}
+
+
+def hae_dirs(cfg) -> list[Path]:
+    extra = (cfg.get("carry") or {}).get("health_auto_export_dir")
+    dirs = [Path(extra).expanduser()] if extra else []
+    dirs += HAE_DIRS
+    dirs += list((Path.home() / "Library/Mobile Documents").glob("*HealthAutoExport*/Documents"))
+    return [d for d in dirs if d.exists()]
+
+
+def _hae_date(s: str):
+    """'2024-02-06 14:30:00 -0800' → aware datetime."""
+    try:
+        return datetime.strptime(s, "%Y-%m-%d %H:%M:%S %z")
+    except Exception:  # noqa: BLE001
+        return parse_iso(s)
+
+
+def hae_records(payload: dict) -> list[dict]:
+    """Translate one Health Auto Export JSON document into DATA-CONTRACT §4 records."""
+    out = []
+    data = payload.get("data", payload)
+    for metric in data.get("metrics", []) or []:
+        name, units = metric.get("name"), metric.get("units") or ""
+        for pt in metric.get("data", []) or []:
+            when = _hae_date(str(pt.get("date", "")))
+            if not when:
+                continue
+            src = pt.get("source") or "Health Auto Export"
+            if name == "sleep_analysis":
+                start = _hae_date(str(pt.get("sleepStart") or pt.get("inBedStart") or "")) or when
+                cursor = start
+                for stage, hours in (("core", pt.get("core")), ("deep", pt.get("deep")), ("rem", pt.get("rem")), ("awake", pt.get("awake"))):
+                    if not hours:
+                        continue
+                    end = cursor + timedelta(hours=float(hours))
+                    out.append({"t": "sleep", "start": iso(cursor), "end": iso(end), "v": stage, "u": "stage", "src": src,
+                                "meta": {"approx": True}})
+                    cursor = end
+                if not any(pt.get(k) for k in ("core", "deep", "rem")) and pt.get("asleep"):
+                    out.append({"t": "sleep", "start": iso(start), "end": iso(start + timedelta(hours=float(pt["asleep"]))),
+                                "v": "asleepUnspecified", "u": "stage", "src": src, "meta": {"approx": True}})
+                continue
+            if name not in HAE_NAMES:
+                continue
+            t, unit = HAE_NAMES[name]
+            if name == "heart_rate":
+                value = pt.get("Avg", pt.get("qty"))
+            else:
+                value = pt.get("qty")
+            if value is None:
+                continue
+            if name == "blood_oxygen_saturation" and value > 1.5:
+                value = value / 100.0
+            out.append({"t": t, "start": iso(when), "end": iso(when), "v": value, "u": unit or units, "src": src})
+    for w in data.get("workouts", []) or []:
+        start, end = _hae_date(str(w.get("start", ""))), _hae_date(str(w.get("end", "")))
+        if not start:
+            continue
+        meta = {}
+        dist = w.get("distance") or {}
+        if isinstance(dist, dict) and dist.get("qty") is not None:
+            meta["distance_m"] = float(dist["qty"]) * (1000 if str(dist.get("units", "")).lower() in ("km", "kilometer", "kilometers") else 1)
+        energy = w.get("activeEnergyBurned") or w.get("activeEnergy") or {}
+        if isinstance(energy, dict) and energy.get("qty") is not None:
+            meta["energy_kcal"] = float(energy["qty"])
+        out.append({"t": "workout", "start": iso(start), "end": iso(end or start), "v": w.get("name") or "workout", "u": "type",
+                    "src": w.get("source") or "Health Auto Export", "meta": meta})
+    return out
+
+
+def collect_health_auto_export(store, cfg, backfill_start: datetime) -> int:
+    new = 0
+    cursors = _line_cursor(store, "health_hae")
+    for d in hae_dirs(cfg):
+        icloud_download(d)
+        for f in sorted(d.rglob("*.json")):
+            key = str(f)
+            stamp = f"{int(f.stat().st_mtime)}:{f.stat().st_size}"
+            if cursors.get(key) == stamp:
+                continue
+            try:
+                payload = json.loads(f.read_text())
+            except Exception:  # noqa: BLE001
+                continue
+            for r in hae_records(payload):
+                start, end = parse_iso(r["start"]), parse_iso(r["end"])
+                if not start or start < backfill_start:
+                    continue
+                text = f"{r['v']} {r['u']}".strip() if not isinstance(r["v"], str) else f"{r['v']}"
+                meta = {"v": r["v"], "u": r["u"], "src": r["src"], "via": "health-auto-export"}
+                meta.update(r.get("meta") or {})
+                if store.upsert(id=stable_id("health", r["t"], r["start"], r["end"], r["src"]), source="health", kind=r["t"],
+                                ts=start, ts_end=end, title=r["t"], text=text, meta=meta, device="iphone"):
+                    new += 1
+            cursors[key] = stamp
+    store.set_cursor("health_hae", json.dumps(cursors), new)
+    return new

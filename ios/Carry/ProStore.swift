@@ -2,11 +2,14 @@ import Foundation
 import StoreKit
 import UIKit
 
-/// The single plan, `app.carry.pro`, through StoreKit 2. Writes `license.json` (§7) whenever the
-/// entitlement changes and on every launch while it is active; the Mac verifies the JWS offline.
+/// The single plan through StoreKit 2: one set of features, two billing periods (yearly first).
+/// Writes `license.json` (§7) whenever the entitlement changes and on every launch while it is active;
+/// the Mac verifies the JWS offline.
 @MainActor
 final class ProStore: ObservableObject {
-    static let productID = "app.carry.pro"
+    static let yearlyID = "app.carry.pro.annual"
+    static let monthlyID = "app.carry.pro"
+    static let productIDs = [yearlyID, monthlyID]
 
     enum Availability: Equatable {
         case loading
@@ -15,7 +18,8 @@ final class ProStore: ObservableObject {
     }
 
     @Published private(set) var availability: Availability = .loading
-    @Published private(set) var product: Product?
+    @Published private(set) var product: Product?   // yearly, the primary offer
+    @Published private(set) var monthly: Product?
     @Published private(set) var isSubscribed = false
     @Published private(set) var expiresAt: Date?
     @Published private(set) var willRenew = true
@@ -27,11 +31,18 @@ final class ProStore: ObservableObject {
     private var store: ContainerStore?
     private var updates: Task<Void, Never>?
     private var demoPrice: String?
+    private var demoMonthly: String?
 
-    /// `$5.99 / month`, from the App Store.
+    /// `$39 / year`, from the App Store.
     var priceLine: String? {
         if let product { return "\(product.displayPrice) / \(Self.periodWord(product))" }
         return demoPrice
+    }
+
+    /// `$5.99 / month`, the same plan billed monthly.
+    var monthlyLine: String? {
+        if let monthly { return "\(monthly.displayPrice) / \(Self.periodWord(monthly))" }
+        return demoMonthly
     }
 
     /// DEBUG simulator runs without a StoreKit configuration show a placeholder price.
@@ -54,8 +65,11 @@ final class ProStore: ObservableObject {
     func load() async {
         availability = .loading
         do {
-            if let found = try await Product.products(for: [Self.productID]).first {
-                product = found
+            let found = try await Product.products(for: Self.productIDs)
+            product = found.first { $0.id == Self.yearlyID }
+            monthly = found.first { $0.id == Self.monthlyID }
+            if product != nil || monthly != nil {
+                if product == nil { product = monthly; monthly = nil }
                 availability = .ready
             } else {
                 availability = .unavailable("The App Store has no price for Carry Pro yet.")
@@ -65,7 +79,8 @@ final class ProStore: ObservableObject {
         }
         #if DEBUG
         if product == nil, LaunchOptions.demo {
-            demoPrice = "$5.99 / month"
+            demoPrice = "$39 / year"
+            demoMonthly = "$5.99 / month"
             availability = .ready
         }
         #endif
@@ -76,12 +91,12 @@ final class ProStore: ObservableObject {
         var active = false
         for await result in Transaction.currentEntitlements {
             guard case .verified(let transaction) = result,
-                  transaction.productID == Self.productID,
+                  Self.productIDs.contains(transaction.productID),
                   transaction.revocationDate == nil else { continue }
             if let expiry = transaction.expirationDate, expiry < Date() { continue }
             active = true
             expiresAt = transaction.expirationDate
-            await writeLicense(result.jwsRepresentation)
+            await writeLicense(result.jwsRepresentation, productID: transaction.productID)
         }
         isSubscribed = active
         if !active { expiresAt = nil }
@@ -92,8 +107,8 @@ final class ProStore: ObservableObject {
         }
     }
 
-    func purchase() async {
-        guard let product else {
+    func purchase(monthly wantsMonthly: Bool = false) async {
+        guard let product = wantsMonthly ? (monthly ?? product) : product else {
             if isDemo { setMessage("Simulator placeholder. Run from Xcode with Carry.storekit to test a purchase.", error: false) }
             return
         }
@@ -141,7 +156,7 @@ final class ProStore: ObservableObject {
     }
 
     private func apply(_ result: VerificationResult<Transaction>) async {
-        guard case .verified(let transaction) = result, transaction.productID == Self.productID else { return }
+        guard case .verified(let transaction) = result, Self.productIDs.contains(transaction.productID) else { return }
         if transaction.revocationDate != nil {
             isSubscribed = false
             expiresAt = nil
@@ -154,12 +169,12 @@ final class ProStore: ObservableObject {
         }
         isSubscribed = true
         expiresAt = transaction.expirationDate
-        await writeLicense(result.jwsRepresentation)
+        await writeLicense(result.jwsRepresentation, productID: transaction.productID)
     }
 
-    private func writeLicense(_ jws: String) async {
+    private func writeLicense(_ jws: String, productID: String) async {
         guard let store else { return }
-        try? await store.writeLicense(License(productId: Self.productID, jws: jws))
+        try? await store.writeLicense(License(productId: productID, jws: jws))
         licenseWrittenAt = Date()
     }
 

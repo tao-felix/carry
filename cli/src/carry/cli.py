@@ -161,6 +161,8 @@ def sync(quiet: bool = typer.Option(False, "--quiet", "-q"),
                     log(Text(f"  skip {name}: {note}", style="yellow"))
             else:
                 totals[name] = APP_READERS[name](store, cfg, backfill) if container.present() else 0
+                if name == "health" and container.hae_dirs(cfg):
+                    totals["health (Health Auto Export)"] = container.collect_health_auto_export(store, cfg, backfill)
             store.commit()
         except Exception as e:  # noqa: BLE001
             store.set_cursor(name, None, 0, error=str(e))

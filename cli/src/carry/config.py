@@ -23,6 +23,7 @@ CONTAINER_DIR = Path(
     )
 )
 PRO_PRODUCT_ID = "app.carry.pro"
+PRO_PRODUCT_IDS = {"app.carry.pro", "app.carry.pro.annual"}  # one plan, two billing periods
 
 
 @dataclass(frozen=True)

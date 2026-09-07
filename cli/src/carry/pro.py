@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 
-from carry.config import CONTAINER_DIR, PRO_PRODUCT_ID
+from carry.config import CONTAINER_DIR, PRO_PRODUCT_ID, PRO_PRODUCT_IDS
 
 GRACE_SECONDS = 3 * 24 * 3600
 
@@ -71,8 +71,8 @@ def verify_jws(jws: str) -> ProStatus:
         chain[0].public_key().verify(encode_dss_signature(r, s), f"{h64}.{p64}".encode(), ec.ECDSA(hashes.SHA256()))
     except (InvalidSignature, Exception):  # noqa: BLE001
         return ProStatus(False, "signature does not verify")
-    if payload.get("productId") != PRO_PRODUCT_ID:
-        return ProStatus(False, f"license is for {payload.get('productId')}, not {PRO_PRODUCT_ID}")
+    if payload.get("productId") not in PRO_PRODUCT_IDS:
+        return ProStatus(False, f"license is for {payload.get('productId')}, not Carry Pro")
     if payload.get("revocationDate"):
         return ProStatus(False, "license was revoked")
     exp_ms = payload.get("expiresDate")

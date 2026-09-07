@@ -141,14 +141,14 @@ Written by the Share Extension. `<id>` = `YYYYMMDDTHHmmssZ-<6 random base32 char
 
 ## 7. License: `license.json`
 
-The single paid plan is **Carry Pro** (product id `app.carry.pro`, auto-renewing monthly). There is exactly one plan. Do not add tiers.
+The single paid plan is **Carry Pro**. One plan, two billing periods: `app.carry.pro.annual` ($39 / year, the primary offer) and `app.carry.pro` ($5.99 / month). There is exactly one plan and one set of features. Do not add tiers.
 
 ```json
 { "schema": 1, "product_id": "app.carry.pro", "jws": "<StoreKit 2 signed transaction, compact JWS>", "updated_at": "..." }
 ```
 
 - The iOS app writes the latest verified `Transaction` JWS (`transaction.jwsRepresentation`) whenever entitlement changes and at least once a day while active.
-- The Mac verifies the JWS offline: `x5c` chain up to Apple Root CA G3, ES256 signature, `productId == app.carry.pro`, `expiresDate` in the future (with a 3-day grace).
+- The Mac verifies the JWS offline: `x5c` chain up to Apple Root CA G3, ES256 signature, `productId` is one of the two Carry Pro product ids, `expiresDate` in the future (with a 3-day grace).
 - What Pro unlocks, and only this: **post-processing of media on the Mac**. Screenshot and photo OCR (Vision), voice memo and inbox audio transcription (Whisper). Everything else is free and open source.
 - Developer override for testing on the Mac: `CARRY_PRO=1`.
 

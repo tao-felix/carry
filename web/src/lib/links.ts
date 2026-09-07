@@ -18,7 +18,8 @@ export const links = {
   cliInit: "carry init",
 
   /** The single paid plan. */
-  proPrice: "$5.99 / month",
+  proPrice: "$39 / year",
+  proPriceMonthly: "$5.99 / month",
 
   /** Paths and commands quoted on the page. */
   contextDir: "~/.carry/context/",

@@ -1,60 +1,69 @@
 {
-  "identifier" : "C4A11E7D",
-  "nonRenewingSubscriptions" : [
-
-  ],
-  "products" : [
-
-  ],
-  "settings" : {
-    "_applicationInternalID" : "",
-    "_developerTeamID" : "",
-    "_failTransactionsEnabled" : false,
-    "_lastSynchronizedDate" : 0,
-    "_locale" : "en_US",
-    "_storefront" : "USA",
-    "_storeKitErrors" : [
-
-    ]
+  "identifier": "C4A11E7D",
+  "nonRenewingSubscriptions": [],
+  "products": [],
+  "settings": {
+    "_applicationInternalID": "",
+    "_developerTeamID": "",
+    "_failTransactionsEnabled": false,
+    "_lastSynchronizedDate": 0,
+    "_locale": "en_US",
+    "_storefront": "USA",
+    "_storeKitErrors": []
   },
-  "subscriptionGroups" : [
+  "subscriptionGroups": [
     {
-      "id" : "21400001",
-      "localizations" : [
-
-      ],
-      "name" : "Carry Pro",
-      "subscriptions" : [
+      "id": "21400001",
+      "localizations": [],
+      "name": "Carry Pro",
+      "subscriptions": [
         {
-          "adHocOffers" : [
-
-          ],
-          "codeOffers" : [
-
-          ],
-          "displayPrice" : "5.99",
-          "familyShareable" : false,
-          "groupNumber" : 1,
-          "internalID" : "6F1B6A2C",
-          "introductoryOffer" : null,
-          "localizations" : [
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "39.00",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "6F1B6A2D",
+          "introductoryOffer": null,
+          "localizations": [
             {
-              "description" : "Turns pictures and audio into text your agent can read.",
-              "displayName" : "Carry Pro",
-              "locale" : "en_US"
+              "description": "Turns pictures and audio into text your agent can read.",
+              "displayName": "Carry Pro",
+              "locale": "en_US"
             }
           ],
-          "productID" : "app.carry.pro",
-          "recurringSubscriptionPeriod" : "P1M",
-          "referenceName" : "Carry Pro",
-          "subscriptionGroupID" : "21400001",
-          "type" : "RecurringSubscription"
+          "productID": "app.carry.pro.annual",
+          "recurringSubscriptionPeriod": "P1Y",
+          "referenceName": "Carry Pro (yearly)",
+          "subscriptionGroupID": "21400001",
+          "type": "RecurringSubscription"
+        },
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "5.99",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "6F1B6A2C",
+          "introductoryOffer": null,
+          "localizations": [
+            {
+              "description": "Turns pictures and audio into text your agent can read.",
+              "displayName": "Carry Pro",
+              "locale": "en_US"
+            }
+          ],
+          "productID": "app.carry.pro",
+          "recurringSubscriptionPeriod": "P1M",
+          "referenceName": "Carry Pro",
+          "subscriptionGroupID": "21400001",
+          "type": "RecurringSubscription"
         }
       ]
     }
   ],
-  "version" : {
-    "major" : 3,
-    "minor" : 0
+  "version": {
+    "major": 3,
+    "minor": 0
   }
 }

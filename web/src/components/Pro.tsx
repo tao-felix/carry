@@ -53,7 +53,7 @@ export function Pro() {
             </h3>
             <p className="font-mono text-mono text-ink">{links.proPrice}</p>
           </div>
-          <p className="mt-2 font-mono text-mono-sm text-ink2">One plan. No tiers.</p>
+          <p className="mt-2 font-mono text-mono-sm text-ink2">One plan. Billed yearly, or {links.proPriceMonthly}.</p>
           <ul className="mt-6 grid gap-3">
             {pro.map((t) => (
               <li key={t} className="flex gap-3 text-body text-ink">
