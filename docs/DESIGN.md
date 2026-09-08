@@ -5,6 +5,7 @@ Carry has one job: put what your phone knows in front of your desktop agent, and
 ## Brand
 
 - Name: **Carry**. What you carry in your pocket, carried to your agent's desk.
+- Mark: an italic Instrument Serif **C** carrying a tangerine dot in its crook (the hook and its payload). Ink ground, paper letter. Sources in `brand/` (`mark.svg` for light surfaces, `mark-on-ink.svg`, `icon-1024.png`, `icon-mac.svg`). The menu bar shows the C with the dot away while a sync runs. Never redraw it by hand; regenerate from `brand/`.
 - Tagline (EN): *Everything your phone knows, on your agent's desk.*
 - Tagline (ZH): *把手机里的你，带到 Agent 面前。*
 - Voice: plain, precise, calm. No hype. Say "your iCloud", "your Mac", never "the cloud". Never say "AI-powered".

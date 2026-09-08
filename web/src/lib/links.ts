@@ -10,7 +10,7 @@ export const links = {
   github: "https://github.com/tao-felix/carry",
 
   /** iPhone app. Placeholders until the app is live. */
-  macDownload: "https://github.com/tao-felix/carry/releases/latest/download/Carry-0.1.0-arm64.dmg",
+  macDownload: "https://github.com/tao-felix/carry/releases/latest/download/Carry-0.1.1-arm64.dmg",
   macReleases: "https://github.com/tao-felix/carry/releases/latest",
   appStore: "#ios",
   testflight: "#ios",
