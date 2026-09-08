@@ -30,6 +30,8 @@
 	<true/>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Carry writes the health types you switch on to your own iCloud Drive so your Mac can read them. Nothing goes to a Carry server.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Carry only reads health data. It never writes to Health.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Carry records the places you stay at, and coarse moves, to your own iCloud Drive so your Mac can read them. Always access lets it do this in the background.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
@@ -62,6 +64,8 @@
 		<key>UIColorName</key>
 		<string>LaunchBackground</string>
 	</dict>
+	<key>UIRequiresFullScreen</key>
+	<true/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

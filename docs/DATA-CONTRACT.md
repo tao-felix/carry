@@ -141,7 +141,7 @@ Written by the Share Extension. `<id>` = `YYYYMMDDTHHmmssZ-<6 random base32 char
 
 ## 7. License: `license.json`
 
-The single paid plan is **Carry Pro**. One plan, two billing periods: `app.carry.pro.annual` ($39 / year, the primary offer) and `app.carry.pro` ($5.99 / month). There is exactly one plan and one set of features. Do not add tiers.
+The single paid plan is **Carry Pro**. One plan, two billing periods: `app.carry.pro.annual` ($39.99 / year, the primary offer) and `app.carry.pro` ($5.99 / month). There is exactly one plan and one set of features. Do not add tiers.
 
 ```json
 { "schema": 1, "product_id": "app.carry.pro", "jws": "<StoreKit 2 signed transaction, compact JWS>", "updated_at": "..." }

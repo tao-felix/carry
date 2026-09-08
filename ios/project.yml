@@ -14,7 +14,12 @@ settings:
     SWIFT_VERSION: "5.0"
     SWIFT_STRICT_CONCURRENCY: minimal
     DEVELOPMENT_TEAM: PZHSCK4VXU
-    CODE_SIGN_STYLE: Automatic
+    # Signing is parameterised so the open-source project stays team-neutral.
+    # Release builds for TestFlight pass CARRY_SIGN_STYLE=Manual plus the two profile names on the command line.
+    CARRY_SIGN_STYLE: Automatic
+    CARRY_PROFILE_APP: ""
+    CARRY_PROFILE_SHARE: ""
+    CODE_SIGN_STYLE: "$(CARRY_SIGN_STYLE)"
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
     TARGETED_DEVICE_FAMILY: "1"
@@ -44,6 +49,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: app.carry.ios
         INFOPLIST_FILE: Carry/Info.plist
         CODE_SIGN_ENTITLEMENTS: Carry/Carry.entitlements
+        PROVISIONING_PROFILE_SPECIFIER: "$(CARRY_PROFILE_APP)"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
     dependencies:
@@ -64,6 +70,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: app.carry.ios.share
         INFOPLIST_FILE: CarryShare/Info.plist
         CODE_SIGN_ENTITLEMENTS: CarryShare/CarryShare.entitlements
+        PROVISIONING_PROFILE_SPECIFIER: "$(CARRY_PROFILE_SHARE)"
         APPLICATION_EXTENSION_API_ONLY: YES
 
 schemes:

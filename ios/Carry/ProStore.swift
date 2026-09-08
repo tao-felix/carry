@@ -33,7 +33,7 @@ final class ProStore: ObservableObject {
     private var demoPrice: String?
     private var demoMonthly: String?
 
-    /// `$39 / year`, from the App Store.
+    /// `$39.99 / year`, from the App Store.
     var priceLine: String? {
         if let product { return "\(product.displayPrice) / \(Self.periodWord(product))" }
         return demoPrice
@@ -79,7 +79,7 @@ final class ProStore: ObservableObject {
         }
         #if DEBUG
         if product == nil, LaunchOptions.demo {
-            demoPrice = "$39 / year"
+            demoPrice = "$39.99 / year"
             demoMonthly = "$5.99 / month"
             availability = .ready
         }
