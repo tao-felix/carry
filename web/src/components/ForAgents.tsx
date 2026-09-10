@@ -4,6 +4,12 @@ import { CopyButton } from "./CopyButton";
 
 const snippets: { title: string; where: string; code: string; note?: string }[] = [
   {
+    title: "Skill",
+    where: "Claude Code · Codex · Cursor",
+    code: links.skillAdd,
+    note: `One SKILL.md that teaches any agent where your phone context lives, how to search it, and what not to do with it. Same file via the CLI: ${links.skillCli}. Source: skills/carry/SKILL.md in the repo.`,
+  },
+  {
     title: "Claude Code",
     where: "Terminal",
     code: links.mcpAddClaude,
@@ -29,7 +35,7 @@ export function ForAgents() {
       id="agents"
       number="06"
       title="For agents"
-      lede="Three ways in. The file is enough; MCP adds search."
+      lede="Four ways in. The skill tells the agent how; the file is enough; MCP adds search."
     >
       <div className="grid gap-4">
         {snippets.map((s) => (

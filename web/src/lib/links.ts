@@ -30,6 +30,8 @@ export const links = {
   mcpAddClaudeCli: "claude mcp add carry -- carry mcp",
   mcpCodexPath: "~/.codex/config.toml",
   mcpCodexToml: '[mcp_servers.carry]\nurl = "http://127.0.0.1:47850/mcp"\ndefault_tools_approval_mode = "auto"',
+  skillAdd: "npx skills add tao-felix/carry",
+  skillCli: "carry skill install",
   agentsMd:
     'My phone context lives in ~/.carry/context/. Read latest.md at the start of a session when my request touches my day, my health, places, or things I shared from my phone. Use `carry search "<query>"` for anything older.',
 } as const;

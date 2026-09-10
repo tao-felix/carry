@@ -397,6 +397,30 @@ def agent(action: str = typer.Argument(..., help="install | uninstall | restart 
         con.print("installed" if launchd.installed() else "not installed")
 
 
+@app.command()
+def skill(action: str = typer.Argument("install", help="install | show | path"),
+          to: str = typer.Option(None, "--to", help="Directory to install into (default: ~/.claude/skills)")):
+    """Install the official Carry skill (SKILL.md) for Claude Code and other Agent-Skills-compatible agents."""
+    from importlib.resources import files
+    from pathlib import Path
+    import shutil
+
+    src = files("carry").joinpath("assets/SKILL.md")
+    if action == "show":
+        con.print(src.read_text())
+        return
+    if action == "path":
+        con.print(str(src))
+        return
+    dest_dir = Path(to).expanduser() if to else Path.home() / ".claude" / "skills"
+    dest = dest_dir / "carry" / "SKILL.md"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(str(src), dest)
+    con.print(Text(f"→ {dest}", style=DIM))
+    con.print("Claude Code loads it on the next session. Codex/Cursor: pass --to their skills directory, "
+              "or `npx skills add tao-felix/carry`.")
+
+
 @app.command(name="open")
 def open_cmd():
     """Open the context folder in Finder."""

@@ -47,6 +47,10 @@ args = ["mcp"]
 default_tools_approval_mode = "auto"       # interactive Codex still asks once; `codex exec` needs --dangerously-bypass-approvals-and-sandbox as of 0.146
 ```
 
+## Skill (for any agent)
+
+`skills/carry/SKILL.md` is the official Carry skill: where the context lives, the three access levels (file → CLI → MCP), a playbook for common questions, and the privacy rules. Install it for Claude Code with `carry skill install` (copies to `~/.claude/skills/carry/`) or for any Agent-Skills-compatible agent with `npx skills add tao-felix/carry`.
+
 ## Status
 
 v0.1, September 2026. Mac + iPhone first. Android is next.
