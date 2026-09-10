@@ -417,8 +417,44 @@ def skill(action: str = typer.Argument("install", help="install | show | path"),
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(str(src), dest)
     con.print(Text(f"→ {dest}", style=DIM))
-    con.print("Claude Code loads it on the next session. Codex/Cursor: pass --to their skills directory, "
-              "or `npx skills add tao-felix/carry`.")
+    if not to:
+        for line in _wire_mcp():
+            con.print(Text(f"→ {line}", style=DIM))
+    con.print("Claude Code loads the skill on its next session. Other agents: `npx skills add tao-felix/carry` "
+              "or --to <their skills dir>.")
+
+
+def _wire_mcp() -> list[str]:
+    """Register the carry MCP server where an agent is installed, so the skill's search level works out of the box.
+    Idempotent: skips anything already configured."""
+    import shutil as _sh
+    import subprocess
+    from pathlib import Path
+
+    out: list[str] = []
+    url = "http://127.0.0.1:47850/mcp"
+    exe = _sh.which("carry") or sys.argv[0]
+    claude = _sh.which("claude")
+    if claude:
+        have = subprocess.run([claude, "mcp", "get", "carry"], capture_output=True, text=True)
+        if have.returncode == 0:
+            out.append("Claude Code MCP: already registered")
+        else:
+            args = [claude, "mcp", "add", "--scope", "user"]
+            args += ["--transport", "http", "carry", url] if _app_running() else ["carry", "--", exe, "mcp"]
+            r = subprocess.run(args, capture_output=True, text=True)
+            out.append("Claude Code MCP: registered" if r.returncode == 0 else f"Claude Code MCP: {r.stderr.strip()[:120]}")
+    codex = Path.home() / ".codex" / "config.toml"
+    if codex.parent.exists():
+        text = codex.read_text() if codex.exists() else ""
+        if "[mcp_servers.carry]" in text:
+            out.append("Codex MCP: already in ~/.codex/config.toml")
+        else:
+            block = ("\n[mcp_servers.carry]\n" + (f'url = "{url}"\n' if _app_running() else f'command = "{exe}"\nargs = ["mcp"]\n')
+                     + 'default_tools_approval_mode = "auto"\n')
+            codex.write_text(text.rstrip("\n") + "\n" + block)
+            out.append("Codex MCP: added to ~/.codex/config.toml")
+    return out
 
 
 @app.command(name="open")

@@ -1,6 +1,6 @@
 ---
 name: carry
-description: Read the owner's phone context that Carry keeps on this Mac — photos and screenshots (with OCR text on Pro), voice memos (with transcripts), notes, calendar, reminders, health, places, screen time and anything shared from the phone. Use it whenever a request touches the owner's day ("what did I photograph / record / share today", "where was I", "that screenshot with the price list", "what's on my calendar"), or before summarising or planning anything for them. Works from files alone; the carry CLI and MCP server add search.
+description: Read the owner's phone context that Carry keeps on this Mac — photos and screenshots (with OCR text on Pro), voice memos (with transcripts), notes, calendar, reminders, health, places, screen time and anything shared from the phone. Use it whenever a request touches the owner's day ("what did I photograph / record / share today", "where was I", "that screenshot with the price list", "what's on my calendar"), or before summarising or planning anything for them. Works from files alone; the carry CLI and MCP server add fast search (`carry skill install` wires both).
 license: MIT
 metadata:
   author: Carry (https://carry-site.vercel.app)
@@ -39,6 +39,8 @@ How to read it:
 
 Source names: `photos screenshots voice_memos notes messages calendar reminders safari screen_time health location inbox`.
 Search is full-text trigram, so Chinese and partial words work. `item(id)` returns a long transcript or OCR text in full; the digest only shows the first lines.
+
+**Pick the fastest level that answers the question.** Reading `latest.md` is one file read (a few KB) and covers "today"; do it once per session. The MCP server answers `search`/`item` in milliseconds while Carry for Mac runs; the CLI does the same but pays a ~0.5 s process start per call, so never loop over it. Do not grep the whole `~/.carry/context/` folder when `search --since` exists.
 
 MCP setup, if the owner asks: `claude mcp add --transport http carry http://127.0.0.1:47850/mcp` (Carry for Mac serves it while running) or `claude mcp add carry -- carry mcp` (CLI, stdio).
 
