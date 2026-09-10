@@ -49,7 +49,7 @@ default_tools_approval_mode = "auto"       # interactive Codex still asks once; 
 
 ## Skill (for any agent)
 
-`skills/carry/SKILL.md` is the official Carry skill: where the context lives, the three access levels (file → CLI → MCP), a playbook for common questions, and the privacy rules. Install it for Claude Code with `carry skill install` (copies to `~/.claude/skills/carry/`) or for any Agent-Skills-compatible agent with `npx skills add tao-felix/carry`.
+`skills/carry/SKILL.md` is the official Carry skill: where the context lives, the three access levels (file → CLI → MCP), a playbook for common questions, and the privacy rules. It is served at https://carry-site.vercel.app/SKILL.md. Install for Claude Code with one line (`mkdir -p ~/.claude/skills/carry && curl -fsSL https://carry-site.vercel.app/SKILL.md -o ~/.claude/skills/carry/SKILL.md`), tell your agent to install it from that URL, or run `carry skill install`, which also registers the MCP server.
 
 ## Status
 

@@ -7,7 +7,8 @@
     "dev": "next dev -p 4720",
     "build": "next build",
     "start": "next start -p 4720",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prebuild": "mkdir -p public && cp ../skills/carry/SKILL.md public/SKILL.md"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",

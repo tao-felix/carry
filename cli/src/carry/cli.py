@@ -420,8 +420,8 @@ def skill(action: str = typer.Argument("install", help="install | show | path"),
     if not to:
         for line in _wire_mcp():
             con.print(Text(f"→ {line}", style=DIM))
-    con.print("Claude Code loads the skill on its next session. Other agents: `npx skills add tao-felix/carry` "
-              "or --to <their skills dir>.")
+    con.print("Claude Code loads the skill on its next session. Other agents: --to <their skills dir>, "
+              "or fetch https://carry-site.vercel.app/SKILL.md.")
 
 
 def _wire_mcp() -> list[str]:

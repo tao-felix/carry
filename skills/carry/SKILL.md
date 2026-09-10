@@ -5,6 +5,7 @@ license: MIT
 metadata:
   author: Carry (https://carry-site.vercel.app)
   version: "0.1"
+  source: https://carry-site.vercel.app/SKILL.md
 ---
 
 # Carry: the owner's phone, on your desk

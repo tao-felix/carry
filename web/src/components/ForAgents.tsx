@@ -5,9 +5,9 @@ import { CopyButton } from "./CopyButton";
 const snippets: { title: string; where: string; code: string; note?: string }[] = [
   {
     title: "Skill",
-    where: "Claude Code · Codex · Cursor",
-    code: links.skillAdd,
-    note: `One SKILL.md that teaches any agent where your phone context lives, how to search it, and what not to do with it. Same file via the CLI: ${links.skillCli}. Source: skills/carry/SKILL.md in the repo.`,
+    where: links.skillUrl,
+    code: links.skillInstall,
+    note: `One SKILL.md that teaches any agent where your phone context lives, how to search it, and what not to do with it. Or just tell your agent: "install the skill at ${links.skillUrl}". ${links.skillCli} does the same and registers MCP too.`,
   },
   {
     title: "Claude Code",
