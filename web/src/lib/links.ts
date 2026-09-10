@@ -31,7 +31,9 @@ export const links = {
   mcpCodexPath: "~/.codex/config.toml",
   mcpCodexToml: '[mcp_servers.carry]\nurl = "http://127.0.0.1:47850/mcp"\ndefault_tools_approval_mode = "auto"',
   skillUrl: "https://carry-site.vercel.app/SKILL.md",
-  skillInstall:
+  skillAsk:
+    "Install the Carry skill: fetch https://carry-site.vercel.app/SKILL.md, save it as ~/.claude/skills/carry/SKILL.md (or your agent's skills folder), then read it before answering anything about my phone, my day, or things I shared from my phone.",
+  skillCurl:
     "mkdir -p ~/.claude/skills/carry && curl -fsSL https://carry-site.vercel.app/SKILL.md -o ~/.claude/skills/carry/SKILL.md",
   skillCli: "carry skill install",
   agentsMd:
